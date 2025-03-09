@@ -170,7 +170,7 @@ class MessageDecodingEnv(SimpleVisionEnv):
 
         def correctness_reward_func(completions, **kwargs) -> List[float]:
             """
-            1.0 if exactly correct, otherwise 0.0. Conditioned on getting the the <chars> section correct.
+            1.0 if exactly correct, otherwise 0.0. Conditioned on getting the <chars> section correct.
             """
             # parse the predicted decoded message from each completion
             responses = [self.parser.parse(c[0]["content"]).answer for c in completions]
