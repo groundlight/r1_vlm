@@ -32,7 +32,7 @@ def get_font(size):
 
 
 def generate_decoder_image(
-    mapping, image_size=300, background_color="white", text_color="black"
+    mapping, image_size=300, background_color="white", text_color="black", random_size=False, max_font_size=20, min_font_size=3
 ):
     """
     Generates an image of the decoder, which is a 5x5 grid plus one extra mapping,
@@ -49,11 +49,16 @@ def generate_decoder_image(
     grid_width = image_size // 5  # 60px
     grid_height = (image_size - 50) // 5  # 50px (reserving 50px for bottom item)
 
-    # Start with a relatively small font size - we can adjust this
-    font = get_font(20)
 
     # Place first 25 mappings in the grid
     for idx in range(25):
+        # Determine the font and font size based on random_size
+        if random_size:
+            font_size = random.randint(min_font_size, max_font_size)
+        else:
+            font_size = max_font_size
+        font = get_font(font_size)
+
         row = idx // 5
         col = idx % 5
         source, target = mapping_items[idx]
@@ -68,8 +73,14 @@ def generate_decoder_image(
         text_height = bbox[3] - bbox[1]
 
         # Center text in cell
+        # If using random_size, we will also randomly shift the text in the cell, but making sure it's still inside the cell
         text_x = x - text_width // 2
         text_y = y - text_height // 2
+        if random_size:
+            x_shift = random.randint(-grid_width // 4, grid_width // 4)
+            y_shift = random.randint(-grid_height // 4, grid_height // 4)
+            text_x += x_shift
+            text_y += y_shift
 
         draw.text((text_x, text_y), mapping_text, fill=text_color, font=font)
 
