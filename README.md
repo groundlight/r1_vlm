@@ -52,8 +52,12 @@ verifiers/
 Then install with the `uv` package manager. See the [uv docs](https://docs.astral.sh/uv/) for instructions if you don't have `uv` installed.
 ```
 cd r1_vlm
-uv pip install hatchling editables torch==2.5.1 && uv sync --no-build-isolation
+uv venv
+uv pip install hatchling editables torch==2.5.1 
+uv sync --no-build-isolation
 ```
+
+See [Troubleshooting Installation](#troubleshooting-installation) below if you run into issues.
 
 # Task 1: Message Decoding
 We trained `Qwen2.5VL-3B-Instruct` to solve short cryptograms. A cryptogram is a message that has been encoded using a substitution cipher. The model is given a coded message and a decoder image, and it must recover the original message. This task has the nice property that it is very difficult to solve without engaging with both text and image modalities - so it forces the model to use all of its capabilities. Our model achieves 96% accuracy on our eval set.
@@ -209,6 +213,43 @@ Training results:
 <img src="images/message_decoding_correctness_reward.png" alt="Message Decoding Single Word Correctness Reward" width="600"/>
 </p>
 
+
+# Troubleshooting Installation
+
+## Errors installing `flash-attn`
+
+The version of flash attention we're using really wants CUDA 12.4.  You can manually install that alongside your existing CUDA installation with:
+
+```
+wget https://developer.download.nvidia.com/compute/cuda/12.4.1/local_installers/cuda_12.4.1_550.54.15_linux.run
+# If NVIDIA removes this file, find a current one at https://developer.nvidia.com/cuda-toolkit-archive
+# pick the "runfile (local)" version.
+
+sudo sh cuda_12.4.1_550.54.15_linux.run \
+  --toolkit \
+  --silent \
+  --override \
+  --no-drm \
+  --no-opengl-libs \
+  --toolkitpath=/usr/local/cuda-12.4.1 \
+  --defaultroot=/usr/local/cuda-12.4.1
+
+export CUDA_HOME=/usr/local/cuda-12.4.1
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+
+# Now...!
+uv sync --no-build-isolation
+```
+
+## Running in Docker
+
+If you want to give up on a local installation, the supplied `Dockerfile` should work reliably.  Assuming of course you have all the nvidia-docker stuff sorted out, which is its own can of worms.
+
+```
+docker build -t r1_vlm .
+docker run -it --gpus all r1_vlm
+```
 
 # Acknowledgements
 - We thank @willccbb for his work on the `verifiers` [package](https://github.com/willccbb/verifiers). We loved his "environment" abstraction and take advantage of it in this project.
