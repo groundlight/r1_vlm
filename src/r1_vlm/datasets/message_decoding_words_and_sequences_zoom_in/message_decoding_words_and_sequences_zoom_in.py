@@ -109,13 +109,6 @@ def create_sample(example):
     assert len(alphabet) == 26
     mapping = generate_mapping(alphabet)
 
-    # add a mapping for the underscore ("_") character. It will map to " " (space).
-    # This is so we can effectively communicate the space character in the coded message.
-    mapping["_"] = " "
-
-    # reverse the mapping to encode the message
-    reverse_mapping = {v: k for k, v in mapping.items()}
-
     positive_mappings = {k: v for k, v in mapping.items() if v in message.lower()} # mappings that should be used to decode the message
     negative_mappings = {k: v for k, v in mapping.items() if v not in message.lower()} # mappings that is irrelevant to the message
 
@@ -137,6 +130,12 @@ def create_sample(example):
         small_mappings_keys=small_mappings_keys,
     )
     
+    # add a mapping for the underscore ("_") character. It will map to " " (space).
+    # This is so we can effectively communicate the space character in the coded message.
+    mapping["_"] = " "
+
+    # reverse the mapping to encode the message
+    reverse_mapping = {v: k for k, v in mapping.items()}
 
     # create the coded and decoded message. If we encounter a character that is not in the mapping,
     # we will map it to itself.
