@@ -80,6 +80,12 @@ def generate_zoom_in_decoder_image(
 
     # Add the 26th mapping below the grid
     source, target = mapping_items[25]
+    if source in small_mapping_keys:
+        font_size = min_font_size + random.uniform(-font_size_variation, font_size_variation)
+    else:
+        font_size = max_font_size + random.uniform(-font_size_variation, font_size_variation)
+
+    font = get_font(font_size)
     bottom_text = f"{source}→{target}"
     bbox = draw.textbbox((0, 0), bottom_text, font=font)
     text_width = bbox[2] - bbox[0]
@@ -89,8 +95,13 @@ def generate_zoom_in_decoder_image(
     bottom_x = (image_size - text_width) // 2
     bottom_y = (5 * grid_height) + 10  # 10px padding after grid
 
-    draw.text((bottom_x, bottom_y), bottom_text, fill=text_color, font=font)
+    x_shift = random.randint(-grid_width // 4, grid_width // 4)
+    y_shift = random.randint(-grid_height // 4, grid_height // 4)
+    bottom_x += x_shift
+    bottom_y += y_shift
 
+    draw.text((bottom_x, bottom_y), bottom_text, fill=text_color, font=font)
+    full_coordinates[bottom_text] = (bottom_x, bottom_y, font_size)
     return image, full_coordinates
 
 
