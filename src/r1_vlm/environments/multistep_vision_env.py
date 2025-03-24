@@ -216,3 +216,68 @@ class MultistepVisionEnv(Environment):
         )
         
         return output
+    
+    def preprocess_messages(self, prompts_messages: list[list[dict[str, Any]]], completions_messages: list[list[dict[str, Any]]]) -> list[list[dict[str, Any]]]:
+        '''
+        1. Combines prompts and completion messages into full conversations
+        2. Removes all messages before the first assistant message, leaving only the completion
+        3. Merges elements of the completion that come from the same source and are text only
+        
+        Args:
+            prompts: list of prompt conversations
+            completions_messages: list of completion conversations
+            
+        Returns:
+            list of preprocessed completion conversations
+        '''    
+        # Combine prompts and completions into full conversations
+        combined_messages = []
+        for prompt_msgs, completion_msgs in zip(prompts_messages, completions_messages):
+            conversation = []
+            conversation.extend(prompt_msgs)
+            conversation.extend(completion_msgs)
+            combined_messages.append(conversation)
+        
+        filtered_messages = []
+        for completion in combined_messages:
+            # find the index of the first assistant message
+            assistant_message_index = next((i for i, message in enumerate(completion) if message["role"] == "assistant"), None)
+            
+            if assistant_message_index is not None:
+                # keep only messages from the first assistant message onwards
+                filtered_messages.append(completion[assistant_message_index:])
+        
+        merged_completions = []
+        
+        for completion in filtered_messages:
+            merged_completion = []
+            current_message = None
+            
+            for message in completion:
+                # If message has non-text content, add it as is
+                if any(item["type"] != "text" for item in message["content"]):
+                    if current_message:
+                        merged_completion.append(current_message)
+                        current_message = None
+                    merged_completion.append(message)
+                    continue
+                    
+                # For text messages
+                if current_message and current_message["role"] == message["role"]:
+                    # Merge text content
+                    current_text = current_message["content"][0]["text"]
+                    new_text = message["content"][0]["text"]
+                    current_message["content"][0]["text"] = current_text + new_text
+                else:
+                    if current_message:
+                        merged_completion.append(current_message)
+                    current_message = {
+                        "role": message["role"],
+                        "content": [{"type": "text", "text": message["content"][0]["text"]}]
+                    }
+            
+            if current_message:
+                merged_completion.append(current_message)
+            merged_completions.append(merged_completion)
+        
+        return merged_completions
