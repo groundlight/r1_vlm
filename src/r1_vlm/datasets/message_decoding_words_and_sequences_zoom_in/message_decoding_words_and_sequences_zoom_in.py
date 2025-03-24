@@ -20,7 +20,7 @@ def generate_zoom_in_decoder_image(
     background_color="white",
     text_color="black",
     max_font_size=20,
-    min_font_size=2,
+    min_font_size=4,
     font_size_variation=1,
     small_mappings_keys=[],
 ):
@@ -130,7 +130,7 @@ def create_sample(example):
         mapping=mapping,
         image_size=400,
         max_font_size=20,
-        min_font_size=2,
+        min_font_size=4,
         font_size_variation=1,
         small_mappings_keys=small_mappings_keys,
     )
