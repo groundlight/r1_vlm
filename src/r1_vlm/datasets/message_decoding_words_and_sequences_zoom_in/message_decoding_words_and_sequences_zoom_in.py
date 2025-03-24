@@ -116,6 +116,8 @@ def create_sample(example):
     # number of small positives: 80% of the time 1, 15% of the time 2, rest 3
     num_small_positives = random.choices([1, 2, 3], weights=[0.8, 0.15, 0.05])[0]
     num_small_negatives = 5 - num_small_positives
+    num_small_positives = min(num_small_positives, len(positive_mappings))
+    num_small_negatives = min(num_small_negatives, len(negative_mappings))
 
     # selecting the mappings that will be shown small on the decoder image
     small_mappings_keys = random.sample(list(positive_mappings.keys()), num_small_positives)
@@ -160,7 +162,7 @@ def create_sample(example):
         else:
             raise ValueError(f"Character {char} is not in the mapping")
 
-    return decoder_image, decoded_message, coded_message, mapping, num_small_positives, full_coordinates
+    return decoder_image, decoded_message, coded_message, mapping, num_small_positives, num_small_negatives, full_coordinates
 
 
 def create_dataset():
@@ -172,6 +174,7 @@ def create_dataset():
         "image": [],
         "task": [],
         "num_small_positives": [],
+        "num_small_negatives": [],
         "full_coordinates": [],
     }
 
@@ -212,6 +215,7 @@ def create_dataset():
         "image": [],
         "task": [],
         "num_small_positives": [],
+        "num_small_negatives": [],
         "full_coordinates": [],
     }
 
@@ -220,7 +224,7 @@ def create_dataset():
         text = example["text"]
         task = example["task"]
 
-        decoder_image, message, coded_message, mapping, num_small_positives, full_coordinates = create_sample(example)
+        decoder_image, message, coded_message, mapping, num_small_positives, num_small_negatives, full_coordinates = create_sample(example)
 
         fpath = f"images/{i}.png"
         full_path = image_dir / f"{i}.png"
@@ -241,6 +245,7 @@ def create_dataset():
         data["image"].append(decoder_image)
         data["task"].append(task)
         data["num_small_positives"].append(num_small_positives)
+        data["num_small_negatives"].append(num_small_negatives)
         data["full_coordinates"].append(full_coordinates)
     decoding_dataset = Dataset.from_dict(data)
 
