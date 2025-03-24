@@ -116,7 +116,7 @@ def zoom_in(full_coordinates, bbox, image_size=300) -> Image.Image:
     valid_full_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
     shorter_side = min(x2 - x1, y2 - y1)
     scale_factor = image_size / shorter_side
-    new_image_size = (int(shorter_side * scale_factor), int(shorter_side * scale_factor))
+    new_image_size = (int((x2 - x1) * scale_factor), int((y2 - y1) * scale_factor))
 
     # create the new image
     new_image = Image.new("RGB", new_image_size, "white")
