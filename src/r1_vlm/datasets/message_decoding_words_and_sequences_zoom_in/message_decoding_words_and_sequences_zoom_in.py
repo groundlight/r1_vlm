@@ -1,0 +1,211 @@
+import os
+import random
+from pathlib import Path
+
+from datasets import Dataset, load_dataset
+from PIL import Image, ImageDraw, ImageFont
+from tqdm.auto import tqdm
+
+from r1_vlm.datasets.message_decoding_words.message_decoding_words_dataset import (
+    generate_mapping,
+    get_font,
+)
+
+# setting a seed for reproducibility
+random.seed(42)
+
+def generate_zoom_in_decoder_image(
+    mapping, image_size=300, background_color="white", text_color="black", random_size=False, max_font_size=20, min_font_size=3
+):
+    """
+    Generates an image of the decoder, which is a 5x5 grid plus one extra mapping,
+    showing character mappings in A→B format.
+    """
+    image = Image.new("RGB", (image_size, image_size), background_color)
+    draw = ImageDraw.Draw(image)
+
+    # shuffle the order of the mapping items
+    mapping_items = list(mapping.items())
+    random.shuffle(mapping_items)
+
+    # Calculate grid dimensions
+    grid_width = image_size // 5  # 60px
+    grid_height = (image_size - 50) // 5  # 50px (reserving 50px for bottom item)
+
+
+    # Place first 25 mappings in the grid
+    for idx in range(25):
+        # Determine the font and font size based on random_size
+        if random_size:
+            font_size = random.randint(min_font_size, max_font_size)
+        else:
+            font_size = max_font_size
+        font = get_font(font_size)
+
+        row = idx // 5
+        col = idx % 5
+        source, target = mapping_items[idx]
+
+        x = col * grid_width + (grid_width // 2)  # center of cell
+        y = row * grid_height + (grid_height // 2)
+
+        # Draw actual mapping text centered in each cell
+        mapping_text = f"{source}→{target}"
+        bbox = draw.textbbox((0, 0), mapping_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        # Center text in cell
+        # If using random_size, we will also randomly shift the text in the cell, but making sure it's still inside the cell
+        text_x = x - text_width // 2
+        text_y = y - text_height // 2
+        if random_size:
+            x_shift = random.randint(-grid_width // 4, grid_width // 4)
+            y_shift = random.randint(-grid_height // 4, grid_height // 4)
+            text_x += x_shift
+            text_y += y_shift
+
+        draw.text((text_x, text_y), mapping_text, fill=text_color, font=font)
+
+    # Add the 26th mapping below the grid
+    source, target = mapping_items[25]
+    bottom_text = f"{source}→{target}"
+    bbox = draw.textbbox((0, 0), bottom_text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    # Position for bottom center text - right after the grid
+    bottom_x = (image_size - text_width) // 2
+    bottom_y = (5 * grid_height) + 10  # 10px padding after grid
+
+    draw.text((bottom_x, bottom_y), bottom_text, fill=text_color, font=font)
+
+    return image
+
+
+def create_sample(example):
+    message = example["text"]
+
+    alphabet = list("abcdefghijklmnopqrstuvwxyz")
+    assert len(alphabet) == 26
+    mapping = generate_mapping(alphabet)
+
+    decoder_image = generate_zoom_in_decoder_image(mapping=mapping, image_size=400, random_size=True, max_font_size=20, min_font_size=3)
+
+    # add a mapping for the underscore ("_") character. It will map to " " (space).
+    # This is so we can effectively communicate the space character in the coded message.
+    mapping["_"] = " "
+
+    # reverse the mapping to encode the message
+    reverse_mapping = {v: k for k, v in mapping.items()}
+
+    # create the coded and decoded message. If we encounter a character that is not in the mapping,
+    # we will map it to itself.
+    coded_message = ""
+    decoded_message = ""
+    for char in message:
+        # check if the character is in the mapping
+        if char.isascii() and (char.isalpha() or char == " "):
+            is_lower = char.islower()
+
+            # pass the lowercase version of the character to the mapping
+            # .lower() on the space character is a no-op
+            key_char = char.lower() if not is_lower else char
+            mapped_char = reverse_mapping[key_char]
+
+            # add lowercase char to the coded message
+            coded_message += mapped_char
+            # use the lowercase version of the character in the decoded message too.
+            decoded_message += char.lower() if not is_lower else char
+
+        # if the character is not in the mapping, something is wrong
+        else:
+            raise ValueError(f"Character {char} is not in the mapping")
+
+    return decoder_image, decoded_message, coded_message, mapping
+
+
+def create_dataset():
+    data = {
+        "coded_message": [],
+        "decoded_message": [],
+        "mapping": [],
+        "file_path": [],
+        "image": [],
+        "task": [],
+    }
+
+    image_dir = Path(__file__).parent / "images"
+    image_dir.mkdir(exist_ok=True)
+
+    # verify that the image directory is empty
+    if len(list(image_dir.glob("*.png"))) > 0:
+        raise ValueError("Image directory is not empty")
+
+    # create dataset of words, word pairs, and word triples
+    words_dataset = load_dataset("sunildkumar/popular_english_words", split="train")
+    words_list = [example["word"] for example in words_dataset]
+    examples = []
+
+    # single word examples
+    for word in words_list:
+        examples.append({"text": word, "task": "word"})
+
+    # word pair examples
+    for i in range(len(words_list)):
+        word1 = random.choice(words_list)
+        word2 = random.choice(words_list)
+        examples.append({"text": f"{word1} {word2}", "task": "word_2"})
+
+    # word triple examples
+    for i in range(len(words_list)):
+        word1 = random.choice(words_list)
+        word2 = random.choice(words_list)
+        word3 = random.choice(words_list)
+        examples.append({"text": f"{word1} {word2} {word3}", "task": "word_3"})
+
+    data = {
+        "coded_message": [],
+        "decoded_message": [],
+        "mapping": [],
+        "file_path": [],
+        "image": [],
+        "task": [],
+    }
+
+    # create dataset from examples
+    for i, example in tqdm(enumerate(examples), total=len(examples)):
+        text = example["text"]
+        task = example["task"]
+
+        decoder_image, message, coded_message, mapping = create_sample(example)
+
+        fpath = f"images/{i}.png"
+        full_path = image_dir / f"{i}.png"
+
+        # verify that the image doesn't already exist, if it does, something is wrong as we should error
+        if full_path.exists():
+            raise ValueError(f"Image {full_path} already exists")
+
+        # Use full path for saving the image
+        full_path = image_dir / f"{i}.png"
+
+        decoder_image.save(full_path)
+
+        data["coded_message"].append(coded_message)
+        data["decoded_message"].append(message)
+        data["mapping"].append(mapping)
+        data["file_path"].append(fpath)
+        data["image"].append(decoder_image)
+        data["task"].append(task)
+
+    decoding_dataset = Dataset.from_dict(data)
+
+    decoding_dataset.push_to_hub(
+        "Groundlight/message-decoding-words-and-sequences-zoom-in",
+        token=os.getenv("HUGGINGFACE_HUB_TOKEN"),
+    )
+
+
+if __name__ == "__main__":
+    create_dataset()
