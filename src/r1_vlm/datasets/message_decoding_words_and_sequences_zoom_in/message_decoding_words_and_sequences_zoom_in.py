@@ -40,6 +40,7 @@ def generate_zoom_in_decoder_image(
     grid_height = (image_size - 50) // 5  # 50px (reserving 50px for bottom item)
 
     small_mapping_keys = set(small_mappings_keys)
+    full_coordinates = {}
 
     # Place first 25 mappings in the grid
     for idx in range(25):
@@ -75,6 +76,7 @@ def generate_zoom_in_decoder_image(
         text_y += y_shift
 
         draw.text((text_x, text_y), mapping_text, fill=text_color, font=font)
+        full_coordinates[mapping_text] = (text_x, text_y, font_size)
 
     # Add the 26th mapping below the grid
     source, target = mapping_items[25]
@@ -89,7 +91,7 @@ def generate_zoom_in_decoder_image(
 
     draw.text((bottom_x, bottom_y), bottom_text, fill=text_color, font=font)
 
-    return image
+    return image, full_coordinates
 
 
 def create_sample(example):
@@ -126,7 +128,7 @@ def create_sample(example):
     small_mappings_keys = random.sample(list(positive_mappings.keys()), num_small_positives)
     small_mappings_keys.extend(random.sample(list(negative_mappings.keys()), num_small_negatives))
 
-    decoder_image = generate_zoom_in_decoder_image(
+    decoder_image, full_coordinates = generate_zoom_in_decoder_image(
         mapping=mapping,
         image_size=400,
         max_font_size=20,
@@ -159,7 +161,7 @@ def create_sample(example):
         else:
             raise ValueError(f"Character {char} is not in the mapping")
 
-    return decoder_image, decoded_message, coded_message, mapping
+    return decoder_image, decoded_message, coded_message, mapping, num_small_positives, full_coordinates
 
 
 def create_dataset():
@@ -170,6 +172,8 @@ def create_dataset():
         "file_path": [],
         "image": [],
         "task": [],
+        "num_small_positives": [],
+        "full_coordinates": [],
     }
 
     image_dir = Path(__file__).parent / "images"
@@ -208,6 +212,8 @@ def create_dataset():
         "file_path": [],
         "image": [],
         "task": [],
+        "num_small_positives": [],
+        "full_coordinates": [],
     }
 
     # create dataset from examples
@@ -215,7 +221,7 @@ def create_dataset():
         text = example["text"]
         task = example["task"]
 
-        decoder_image, message, coded_message, mapping = create_sample(example)
+        decoder_image, message, coded_message, mapping, num_small_positives, full_coordinates = create_sample(example)
 
         fpath = f"images/{i}.png"
         full_path = image_dir / f"{i}.png"
@@ -235,7 +241,8 @@ def create_dataset():
         data["file_path"].append(fpath)
         data["image"].append(decoder_image)
         data["task"].append(task)
-
+        data["num_small_positives"].append(num_small_positives)
+        data["full_coordinates"].append(full_coordinates)
     decoding_dataset = Dataset.from_dict(data)
 
     decoding_dataset.push_to_hub(
