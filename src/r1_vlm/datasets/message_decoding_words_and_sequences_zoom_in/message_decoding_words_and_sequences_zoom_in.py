@@ -96,7 +96,7 @@ def generate_zoom_in_decoder_image(
     bottom_y = (5 * grid_height) + 10  # 10px padding after grid
 
     x_shift = random.randint(-grid_width // 4, grid_width // 4)
-    y_shift = random.randint(-grid_height // 4, grid_height // 4)
+    y_shift = random.randint(-grid_height // 4, 0) # we don't want the bottom text to shift to the bottom further
     bottom_x += x_shift
     bottom_y += y_shift
 
