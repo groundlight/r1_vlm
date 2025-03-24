@@ -15,7 +15,14 @@ from r1_vlm.datasets.message_decoding_words.message_decoding_words_dataset impor
 random.seed(42)
 
 def generate_zoom_in_decoder_image(
-    mapping, image_size=300, background_color="white", text_color="black", random_size=False, max_font_size=20, min_font_size=3
+    mapping,
+    image_size=300,
+    background_color="white",
+    text_color="black",
+    max_font_size=20,
+    min_font_size=2,
+    font_size_variation=1,
+    small_mappings_keys=[],
 ):
     """
     Generates an image of the decoder, which is a 5x5 grid plus one extra mapping,
@@ -32,19 +39,22 @@ def generate_zoom_in_decoder_image(
     grid_width = image_size // 5  # 60px
     grid_height = (image_size - 50) // 5  # 50px (reserving 50px for bottom item)
 
+    small_mapping_keys = set(small_mappings_keys)
 
     # Place first 25 mappings in the grid
     for idx in range(25):
+        source, target = mapping_items[idx]
         # Determine the font and font size based on random_size
-        if random_size:
-            font_size = random.randint(min_font_size, max_font_size)
+        if source in small_mapping_keys:
+            # apply variation to the min font size
+            font_size = min_font_size + random.uniform(-font_size_variation, font_size_variation)
         else:
-            font_size = max_font_size
+            font_size = max_font_size + random.uniform(-font_size_variation, font_size_variation)
+
         font = get_font(font_size)
 
         row = idx // 5
         col = idx % 5
-        source, target = mapping_items[idx]
 
         x = col * grid_width + (grid_width // 2)  # center of cell
         y = row * grid_height + (grid_height // 2)
@@ -59,11 +69,10 @@ def generate_zoom_in_decoder_image(
         # If using random_size, we will also randomly shift the text in the cell, but making sure it's still inside the cell
         text_x = x - text_width // 2
         text_y = y - text_height // 2
-        if random_size:
-            x_shift = random.randint(-grid_width // 4, grid_width // 4)
-            y_shift = random.randint(-grid_height // 4, grid_height // 4)
-            text_x += x_shift
-            text_y += y_shift
+        x_shift = random.randint(-grid_width // 4, grid_width // 4)
+        y_shift = random.randint(-grid_height // 4, grid_height // 4)
+        text_x += x_shift
+        text_y += y_shift
 
         draw.text((text_x, text_y), mapping_text, fill=text_color, font=font)
 
@@ -84,13 +93,19 @@ def generate_zoom_in_decoder_image(
 
 
 def create_sample(example):
+    """
+    Creates a sample for the message decoding dataset.
+    We want the sample to have different levels of difficulty regarding the zoom-in tool usage.
+    The difficulty level is determined by the number of small positives present in the decoder image.
+    Theoretically, the number of small positives represents the number of zoom-in tool usages in a single inference run.
+    In general, we want about 80% of the data to have a single small positive, 15% to have two, and the rest to have three. (this can be modified later)
+    Meanwhile, the number of small negatives is always set to `5 - small positives`.
+    """
     message = example["text"]
 
     alphabet = list("abcdefghijklmnopqrstuvwxyz")
     assert len(alphabet) == 26
     mapping = generate_mapping(alphabet)
-
-    decoder_image = generate_zoom_in_decoder_image(mapping=mapping, image_size=400, random_size=True, max_font_size=20, min_font_size=3)
 
     # add a mapping for the underscore ("_") character. It will map to " " (space).
     # This is so we can effectively communicate the space character in the coded message.
@@ -98,6 +113,28 @@ def create_sample(example):
 
     # reverse the mapping to encode the message
     reverse_mapping = {v: k for k, v in mapping.items()}
+
+    positive_mappings = {k: v for k, v in mapping.items() if v in message.lower()} # mappings that should be used to decode the message
+    negative_mappings = {k: v for k, v in mapping.items() if v not in message.lower()} # mappings that is irrelevant to the message
+
+    # Determining the mappings that are showing small on the decoder image
+    # number of small positives: 80% of the time 1, 15% of the time 2, rest 3
+    num_small_positives = random.choices([1, 2, 3], weights=[0.8, 0.15, 0.05])[0]
+    num_small_negatives = 5 - num_small_positives
+
+    # selecting the mappings that will be shown small on the decoder image
+    small_mappings_keys = random.sample(list(positive_mappings.keys()), num_small_positives)
+    small_mappings_keys.extend(random.sample(list(negative_mappings.keys()), num_small_negatives))
+
+    decoder_image = generate_zoom_in_decoder_image(
+        mapping=mapping,
+        image_size=400,
+        max_font_size=20,
+        min_font_size=2,
+        font_size_variation=1,
+        small_mappings_keys=small_mappings_keys,
+    )
+    
 
     # create the coded and decoded message. If we encounter a character that is not in the mapping,
     # we will map it to itself.
