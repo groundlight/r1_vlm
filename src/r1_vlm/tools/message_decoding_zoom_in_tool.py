@@ -87,6 +87,9 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
     
     coordinates = _zoom_in_tool.lookup_image(image_to_use)
 
-    zoomed_in_image = coordinates_based_zoom_in(coordinates, bbox)
+    # convert the bbox from the normalized format to the absolute format
+    bbox = (bbox[0] * image_to_use.width, bbox[1] * image_to_use.height, bbox[2] * image_to_use.width, bbox[3] * image_to_use.height)
+
+    zoomed_in_image = coordinates_based_zoom_in(coordinates, bbox, image_size=image_to_use.width)
 
     return zoomed_in_image
