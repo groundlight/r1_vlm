@@ -16,7 +16,7 @@ os.environ["WANDB_PROJECT"] = "message-decoding-zoom-in"
 
 
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
-gradient_checkpointing = False
+gradient_checkpointing = True
 
 
 model_config = ModelConfig(
@@ -82,6 +82,7 @@ training_args = GRPOConfig(
     vllm_gpu_memory_utilization=0.5,
     report_to="wandb",
     vllm_device="cuda:3",
+    num_images_per_prompt=4,
 )
 
 
