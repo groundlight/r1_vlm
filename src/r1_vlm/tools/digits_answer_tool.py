@@ -8,9 +8,9 @@ from tqdm import tqdm
 # 2. A tool that takes the task and the image as a key in a dict. Proves we can inject image data into the tool call properly.
 
 
-class DigitsAnswerTool:
+class ImageHashTableTool:
     '''
-    Hash table from image to the image's label and total. 
+    Hash table from image to the corresponding data/answer (e.g., label and total for digits recognition and addition).
     Each image is hashed as a sum of elementwise produce of pixels and a hash matrix of the same shape. 
     '''
     def __init__(self, dataset: Dataset):
@@ -19,16 +19,7 @@ class DigitsAnswerTool:
         self.hash_matrix = None
     
     def build_hash_table(self, dataset: Dataset) -> None:
-        for example in tqdm(dataset, desc="Building hash table"):
-            image = example["image"]
-            label = example["label"]
-            total = example["total"]
-            
-            assert isinstance(image, PIL.Image.Image)
-            assert isinstance(label, list)
-            assert isinstance(total, int)
-            
-            self.add_image(image, label, total)
+        raise NotImplementedError("Error: build_hash_table not implemented.")
         
     def generate_hash_matrix(self, shape: tuple[int, int, int]) -> None:
         '''
@@ -59,7 +50,7 @@ class DigitsAnswerTool:
         return hash_value
         
     
-    def add_image(self, image: PIL.Image.Image, label: list[int], total: int):
+    def add_image(self, image: PIL.Image.Image, data: dict):
         '''
         Adds image to the hash table.
         '''
@@ -68,7 +59,7 @@ class DigitsAnswerTool:
         if hash_value in self.hash_table:
             return
         
-        self.hash_table[hash_value] = {"label": label, "total": total}
+        self.hash_table[hash_value] = data
         
     
     def lookup_image(self, image: PIL.Image.Image) -> dict[str, int | list[int]]:
@@ -82,6 +73,29 @@ class DigitsAnswerTool:
             raise ValueError(" Error: Image not found in the hash table.")
         
         return self.hash_table[hash_value]
+
+class DigitsAnswerTool(ImageHashTableTool):
+    '''
+    Hash table from image to the image's label and total. 
+    '''
+    def __init__(self, dataset: Dataset):
+        super().__init__(dataset)
+        
+        self.build_hash_table(dataset)
+        
+    def build_hash_table(self, dataset: Dataset) -> None:
+        for example in tqdm(dataset, desc="Building hash table"):
+            image = example["image"]
+            label = example["label"]
+            total = example["total"]
+            
+            assert isinstance(image, PIL.Image.Image)
+            assert isinstance(label, list)
+            assert isinstance(total, int)
+            
+            self.add_image(image, {"label": label, "total": total})
+
+        
 
 # Make digits_answer_tool accessible to get_answer
 _digits_answer_tool = None
