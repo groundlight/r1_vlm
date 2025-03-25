@@ -1,7 +1,28 @@
+from tqdm import tqdm
+from datasets import Dataset
 from PIL import Image, ImageDraw
 from r1_vlm.datasets.message_decoding_words_and_sequences_zoom_in.message_decoding_words_and_sequences_zoom_in import get_font
+from r1_vlm.tools.digits_answer_tool import ImageHashTableTool
 
-def zoom_in(full_coordinates, bbox, image_size=300) -> Image.Image:
+
+class ImageHashZoomInTool(ImageHashTableTool):
+    def __init__(self, dataset: Dataset):
+        super().__init__(dataset)
+        
+        self.build_hash_table(dataset)
+        
+    def build_hash_table(self, dataset: Dataset) -> None:
+        for example in tqdm(dataset, desc="Building hash table"):
+            image = example["image"]
+            full_coordinates = example["full_coordinates"]
+
+            assert isinstance(image, Image.Image)
+            assert isinstance(full_coordinates, dict)
+
+            valid_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
+            self.add_image(image, {"coordinates": valid_coordinates})
+
+def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> Image.Image:
     """
     Given the full coordinates of the decoder image, and a bounding box representing the area of the image to zoom in on,
     return the reconstructed zoomed-in image.
@@ -29,3 +50,43 @@ def zoom_in(full_coordinates, bbox, image_size=300) -> Image.Image:
         draw.text((new_x, new_y), mapping_text, fill="black", font=font)
 
     return new_image
+
+# Make zoom_in_tool accessible to zoom_in
+_zoom_in_tool = None
+
+def set_zoom_in_tool(tool: ImageHashZoomInTool):
+    global _zoom_in_tool
+    _zoom_in_tool = tool
+    
+def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) -> Image.Image:
+    '''
+    Returns the zoomed-in image given the image and the bounding box to zoom in on.
+
+    Args:
+        image_name: str, the name of the image to zoom in on.
+        bbox: tuple[float, float, float, float], the bounding box to zoom in on. The bounding box is in the format of (x1, y1, x2, y2),
+            where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner. The coordinates are normalized to the image size and range from 0 to 1.
+
+    Returns:
+        The zoomed-in image.
+
+    Examples:
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": (0.25, 0.30, 0.45, 0.40)}}</tool>
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": (0.80, 0.10, 0.95, 0.25)}}</tool>
+
+    '''
+    if _zoom_in_tool is None:
+        raise ValueError("ZoomInTool not initialized. Call set_zoom_in_tool first.")
+    
+    images = kwargs["images"]
+
+    image_to_use = images.get(image_name, None)
+
+    if image_to_use is None:
+        raise ValueError(f"Error: Image {image_name} not found. Valid image names are: {images.keys()}")
+    
+    coordinates = _zoom_in_tool.lookup_image(image_to_use)
+
+    zoomed_in_image = coordinates_based_zoom_in(coordinates, bbox)
+
+    return zoomed_in_image
