@@ -169,7 +169,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         return dict(images_list)
         
         
-    def call_tool(self, tool_json: str, messages: List[Dict[str, str]], images: Dict[str, Image], **kwargs: Any) -> str:
+    def call_tool(self, tool_json: str, messages: List[Dict[str, str]], images: Dict[str, Image], **kwargs: Any) -> str | Image:
         """
         Call a tool based on JSON command. 
         All tools are passed messages as a kwarg.
@@ -197,7 +197,12 @@ class ToolVisionEnv(MultistepVisionEnv):
             
             # Call the tool function with arguments
             result = tool_func(**tool_args, **kwargs)
-            return str(result)
+            if isinstance(result, Image):
+                # if the result is a Image, return it directly
+                return result
+            else:
+                # otherwise, return the result as a string
+                return str(result)
         except json.JSONDecodeError:
             return "Error: Invalid JSON format"
         except Exception as e:
@@ -221,7 +226,13 @@ class ToolVisionEnv(MultistepVisionEnv):
                 images = self._conversation_to_image_dict(messages)
                 
                 result = self.call_tool(tool_json=parsed.tool, messages=messages, images=images)
-                if len(result.strip()) > 0:                    
+                if isinstance(result, Image):
+                    response = {"role": "user", "content": [
+                            {"type": "text", "text": f"<image_name> tool_result_{len(messages) // 2} </image_name>"},
+                            {"type": "image", "image": result},
+                        ]
+                    }
+                elif isinstance(result, str) and len(result.strip()) > 0:                    
                     response =  {"role": "user", "content": [{"text": self.env_parser.format(result=result), "type": "text"}]}
                 else:
                     response = {"role": "user", "content": [{"text": "Error: Tool execution returned empty output.", "type": "text"}]}
