@@ -85,7 +85,7 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
     if image_to_use is None:
         raise ValueError(f"Error: Image {image_name} not found. Valid image names are: {images.keys()}")
     
-    coordinates = _zoom_in_tool.lookup_image(image_to_use)
+    coordinates = _zoom_in_tool.lookup_image(image_to_use)["coordinates"]
 
     # convert the bbox from the normalized format to the absolute format
     bbox = (bbox[0] * image_to_use.width, bbox[1] * image_to_use.height, bbox[2] * image_to_use.width, bbox[3] * image_to_use.height)
