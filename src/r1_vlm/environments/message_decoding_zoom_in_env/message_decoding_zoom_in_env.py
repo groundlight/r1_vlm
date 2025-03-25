@@ -14,7 +14,7 @@ from r1_vlm.tools.message_decoding_zoom_in_tool import zoom_in
 class MessageDecodingZoomInEnv(ToolVisionEnv):
     def __init__(self,
                  processing_class: AutoProcessor,
-                 dataset_name: str = "Groundlight/message-decoding-words-and-sequences-zoom-in",
+                 dataset_name: str = "Groundlight/message-decoding-words-and-sequences-zoom-in-r1",
                 #  tool that simulates zoom-in by reconstructing the zoomed-in image from the full coordinates of texts
                  tools: list[Callable] = [zoom_in],
                  max_steps: int = 10,
