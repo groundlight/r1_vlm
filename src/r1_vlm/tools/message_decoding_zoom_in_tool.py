@@ -71,8 +71,8 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
         The zoomed-in image.
 
     Examples:
-        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": (0.25, 0.30, 0.45, 0.40)}}</tool>
-        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": (0.80, 0.10, 0.95, 0.25)}}</tool>
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [0.25, 0.30, 0.45, 0.40]}}</tool>
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [0.80, 0.10, 0.95, 0.25]}}</tool>
 
     '''
     if _zoom_in_tool is None:
