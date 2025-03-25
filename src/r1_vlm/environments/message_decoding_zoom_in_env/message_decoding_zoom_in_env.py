@@ -91,10 +91,13 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
                 print(f"Error in check_format: {e}")
                 return 0.0
 
-        def correctness_reward_func(completions, **kwargs) -> list[float]:
+        def correctness_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
             """Reward function that checks if the predicted answer matches the true answer. Only checks the last message in the completion."""
             # parse the predicted decoded message from each completion
-            responses = [self.llm_parser.parse(c[0]["content"]).answer for c in completions]
+
+            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            # parse the last message in each completion (completions are conversations) for data between <answer> and </answer> tags
+            responses = [self.llm_parser.parse(c[-1]["content"][0]["text"]).answer for c in merged_completion_conversations]
             true_decoded_messages = kwargs["decoded_message"]
 
             def check_answer(response, answer):
