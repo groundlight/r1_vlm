@@ -1,6 +1,6 @@
 # The Real IAD dataset is not public, so we cannot share it. However, you may email the authors for access. See instructions here: https://huggingface.co/datasets/Real-IAD/Real-IAD.
 
-# This script takes a path to a local copy of the Real IAD dataset and preprocesses it.
+# This script takes a path to a local copy of the Real IAD dataset and creates a dataset of toy brick examples.
 # Steps:
 # 1. Select the toy brick subset.
 # 2. For each example in the dataset (5 camera views), find those in which the anomaly is visible for examples with anomalies.
@@ -205,21 +205,30 @@ def is_valid_view(*, mask_path):
 
 
 def save_to_hf(*, examples):
-    data = {"image": [], "anomaly_class": [], "bounding_box": []}
+    data = {
+        "image": [], 
+        "anomaly_class": [], 
+        "bounding_box": [],
+        "label": []  
+    }
 
     for example in examples:
         image_path = example["image_path"]
         image = Image.open(image_path)
         data["image"].append(image)
 
-        data["anomaly_class"].append(example["anomaly_class"])
+        anomaly_class = example["anomaly_class"]
+        data["anomaly_class"].append(anomaly_class)
+        data["label"].append(classes_mapping[anomaly_class])
 
         data["bounding_box"].append(example["bounding_box"])
 
     dataset = Dataset.from_dict(data)
 
+    
+    # saving as a private dataset to the Groundlight account (paid), which gets us the dataset viewer. Private datasets on free accounts don't get the viewer.
     dataset.push_to_hub(
-        "sunildkumar/real-iad-toy-block",
+        "Groundlight/real-iad-toy-brick",
         token=os.getenv("HUGGINGFACE_HUB_TOKEN"),
         # Private as we don't have permission to distribute the image data. Other uses will have to download the data from the original source.
         private=True,
