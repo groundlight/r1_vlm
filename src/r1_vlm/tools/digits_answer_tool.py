@@ -55,7 +55,7 @@ class ImageHashTableTool:
         Adds image to the hash table.
         '''
         # check if image's shape is the same as the hash matrix's shape. if not, resize the image to the hash matrix's shape
-        if image.size != self.hash_matrix.shape[:2]:
+        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
             image = image.resize(self.hash_matrix.shape[:2])
         
         hash_value = self.hash_image(image)
