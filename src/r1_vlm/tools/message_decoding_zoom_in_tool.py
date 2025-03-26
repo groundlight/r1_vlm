@@ -64,8 +64,9 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
 
     Args:
         image_name: str, the name of the image to zoom in on.
-        bbox: tuple[float, float, float, float], the bounding box to zoom in on. The bounding box is in the format of (x1, y1, x2, y2),
+        bbox: tuple[float, float, float, float], the bounding box to zoom in on. The bounding box is in the format of [x1, y1, x2, y2],
             where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner. The coordinates are normalized to the image size and range from 0 to 1.
+            Also note that a valid bbox should have x1 < x2 and y1 < y2.
 
     Returns:
         The zoomed-in image.
@@ -77,6 +78,22 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
     '''
     if _zoom_in_tool is None:
         raise ValueError("ZoomInTool not initialized. Call set_zoom_in_tool first.")
+
+    coordinates_names = ["x1", "y1", "x2", "y2"]
+    # check each coordinate and see if it's in the range of 0 to 1
+    invalid_bbox_coordinates = []
+    for coordinate_name, coordinate_value in zip(coordinates_names, bbox):
+        if coordinate_value < 0 or coordinate_value > 1:
+            invalid_bbox_coordinates.append(coordinate_name)
+
+    if len(invalid_bbox_coordinates) > 0:
+        raise ValueError(f"Invalid bbox coordinates: {invalid_bbox_coordinates}. The coordinates should be normalized to the image size and range from 0 to 1.")
+
+    if bbox[0] >= bbox[2]:
+        raise ValueError("Invalid bbox coordinates: x1 should be less than x2.")
+
+    if bbox[1] >= bbox[3]:
+        raise ValueError("Invalid bbox coordinates: y1 should be less than y2.")
     
     images = kwargs["images"]
 
