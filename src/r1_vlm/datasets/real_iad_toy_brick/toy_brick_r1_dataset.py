@@ -26,9 +26,9 @@ def generate_r1_messages(example):
     
     If the block is not ok, please determine the smallest bounding box that contains the entire defect. Express this bounding box using normalized coordinates (as floats from 0 to 1) [x_min, y_min, x_max, y_max].
     
-    Examples:
-    1. If the block is ok, <answer> ok </answer>. 
-    2. If the block has a scratch, <answer> scratch [0.15, 0.12, 0.83, 0.72] </answer>.
+    How to express your answer:
+    1. If the block is ok, <answer> <label> ok </label> </answer>. 
+    2. If the block has a scratch, <answer> <label> scratch </label> <box> [0.15, 0.12, 0.83, 0.72] </box> </answer>.
     """
     
     r1_messages = [
