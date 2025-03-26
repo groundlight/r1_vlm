@@ -22,10 +22,10 @@ class ImageHashZoomInTool(ImageHashTableTool):
             valid_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
             self.add_image(image, {"coordinates": valid_coordinates})
 
-def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> Image.Image:
+def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> tuple[Image.Image, dict[str, tuple[int, int, int]]]:
     """
     Given the full coordinates of the decoder image, and a bounding box representing the area of the image to zoom in on,
-    return the reconstructed zoomed-in image.
+    return the reconstructed zoomed-in image and the zoomed-in full coordinates.
     Since we want the zoomed-in image to be in high resolution, we need to build the image up from the full coordinates, rather than cropping the image.
     """
     # get the coordinates of the bounding box
@@ -39,6 +39,7 @@ def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> Image.I
     new_image = Image.new("RGB", new_image_size, "white")
     draw = ImageDraw.Draw(new_image)
     
+    zoomed_in_full_coordinates = {}
     # iterate over the valid full coordinates and draw them on the new image
     # note that the positions and the font sizes are adjusted and scaled up by the scale factor
     for mapping_text, (x, y, font_size) in valid_full_coordinates.items():
@@ -48,8 +49,8 @@ def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> Image.I
         new_font_size = int(font_size * scale_factor)
         font = get_font(new_font_size)
         draw.text((new_x, new_y), mapping_text, fill="black", font=font)
-
-    return new_image
+        zoomed_in_full_coordinates[mapping_text] = (new_x, new_y, new_font_size)
+    return new_image, zoomed_in_full_coordinates
 
 # Make zoom_in_tool accessible to zoom_in
 _zoom_in_tool = None
@@ -107,6 +108,9 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
     # convert the bbox from the normalized format to the absolute format
     bbox = (bbox[0] * image_to_use.width, bbox[1] * image_to_use.height, bbox[2] * image_to_use.width, bbox[3] * image_to_use.height)
 
-    zoomed_in_image = coordinates_based_zoom_in(coordinates, bbox, image_size=image_to_use.width)
+    zoomed_in_image, zoomed_in_full_coordinates = coordinates_based_zoom_in(coordinates, bbox, image_size=image_to_use.width)
+
+    # add the zoomed-in full coordinates and the zooomed-in image to the hash table in the tool
+    _zoom_in_tool.add_image(zoomed_in_image, {"coordinates": zoomed_in_full_coordinates})
 
     return zoomed_in_image
