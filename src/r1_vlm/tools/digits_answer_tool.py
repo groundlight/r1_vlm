@@ -39,11 +39,15 @@ class ImageHashTableTool:
         Hashes the image.
         '''
         
+        # resize the image if necessary 
+        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
+            image = image.resize(self.hash_matrix.shape[:2])
+        
         image = np.array(image)
         
         if self.hash_matrix is None:
             self.generate_hash_matrix(image.shape)
-        
+
         # hash the image
         hash_value = np.sum(image * self.hash_matrix)
         
