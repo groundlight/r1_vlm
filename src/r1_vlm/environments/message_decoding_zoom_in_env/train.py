@@ -82,7 +82,7 @@ training_args = GRPOConfig(
     vllm_gpu_memory_utilization=0.5,
     report_to="wandb",
     vllm_device="cuda:3",
-    num_images_per_prompt=4,
+    limit_image_per_prompt=4,
 )
 
 
