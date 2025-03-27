@@ -87,13 +87,13 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             return 0.0
         
     def get_rubric(self, **kwargs: Any) -> List[RewardFunc]:
-        def classification_reward_func():
+        def classification_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
             Provides a reward if the model's classification is correct.
             '''
             pass
         
-        def bounding_box_reward_func():
+        def bounding_box_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
             Provides a reward based on the model's proposed bounding box.
             
@@ -104,10 +104,29 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             pass
         
         
-        def format_reward_func():
+        def format_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
             Provides a reward if the model's output is formatted correctly - a <think> </think> section and a <answer> </answer> section.
             '''
+            print('made it to format reward func')
+            print(completions_messages[0])
+            
+            return [1.0 for _ in range(len(completions_messages))]
+            
+        
+        def answer_format_reward_func(prompts, completions, completions_messages, **kwargs):
+            '''
+            The answer format is non trivial for this task. We give a reward if the model's answer is formatted exactly correct.
+            '''
+            print('made it to answer format reward func')
+            print(f"There are {len(completions_messages)} completions")
+            print(completions_messages[0])
+            
+            return [1.0 for _ in range(len(completions_messages))]
+        
+        
+        return [format_reward_func, answer_format_reward_func]
+        #return [classification_reward_func, bounding_box_reward_func, format_reward_func, answer_format_reward_func]
             
             
         

@@ -71,8 +71,12 @@ class SimpleVisionEnv(SimpleEnv):
         )
 
         completion_ids = [states[i]["completion_ids"] for i in range(len(states))]
+        completion_messages = [states[i]["messages"][-1:] for i in range(len(states))]
 
-        return {"ids": completion_ids}
+        return {
+            "ids": completion_ids,
+            "messages": completion_messages
+        }
 
     def prepare_data(self, *, inputs, processing_class):
         """
