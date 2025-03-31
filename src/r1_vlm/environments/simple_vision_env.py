@@ -36,7 +36,10 @@ class SimpleVisionEnv(SimpleEnv):
 
         for i, completion in enumerate(completions):
             states[i]["messages"].append(
-                {"role": "assistant", "content": completion.outputs[0].text}
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": completion.outputs[0].text}],
+                }
             )
             states[i]["prompt_ids"] = list(completion.prompt_token_ids)
             states[i]["completion_ids"] = list(completion.outputs[0].token_ids)
@@ -56,7 +59,10 @@ class SimpleVisionEnv(SimpleEnv):
                     cleaned_content = []
                     for item in cleaned_message["content"]:
                         cleaned_item = item.copy()
-                        if "image" in cleaned_item and cleaned_item["image"] is not None:
+                        if (
+                            "image" in cleaned_item
+                            and cleaned_item["image"] is not None
+                        ):
                             cleaned_item["image"] = "<PIL.Image object>"
                         cleaned_content.append(cleaned_item)
                     cleaned_message["content"] = cleaned_content
@@ -65,7 +71,9 @@ class SimpleVisionEnv(SimpleEnv):
 
         self.logger.info(
             "Prompt 0:\n"
-            + json.dumps(clean_messages_for_logging(states[0]["messages"][:-1]), indent=4)
+            + json.dumps(
+                clean_messages_for_logging(states[0]["messages"][:-1]), indent=4
+            )
             + "\n\nCompletion 0:\n"
             + json.dumps(states[0]["messages"][-1], indent=4)
         )
@@ -73,10 +81,7 @@ class SimpleVisionEnv(SimpleEnv):
         completion_ids = [states[i]["completion_ids"] for i in range(len(states))]
         completion_messages = [states[i]["messages"][-1:] for i in range(len(states))]
 
-        return {
-            "ids": completion_ids,
-            "messages": completion_messages
-        }
+        return {"ids": completion_ids, "messages": completion_messages}
 
     def prepare_data(self, *, inputs, processing_class):
         """
@@ -96,7 +101,7 @@ def prepare_inputs_for_env(*, inputs, processing_class):
     inputs: a list of inputs, in this case a list of examples from our dataset
     processing_class: the processing class to use to process the inputs. This is a VLM processor object from the transformers library.
     """
-    
+
     # WARNING: This is used in SimpleVisionEnv AND MultistepVisionEnv. If you are making changes here, be aware that it will affect both.
 
     conversations = [ex["messages"] for ex in inputs]
