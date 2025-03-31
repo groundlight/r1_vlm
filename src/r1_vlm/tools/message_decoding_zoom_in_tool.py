@@ -108,7 +108,7 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
     # convert the bbox from the normalized format to the absolute format
     bbox = (bbox[0] * image_to_use.width, bbox[1] * image_to_use.height, bbox[2] * image_to_use.width, bbox[3] * image_to_use.height)
 
-    zoomed_in_image, zoomed_in_full_coordinates = coordinates_based_zoom_in(coordinates, bbox, image_size=400)
+    zoomed_in_image, zoomed_in_full_coordinates = coordinates_based_zoom_in(coordinates, bbox, image_size=300)
 
     # add the zoomed-in full coordinates and the zooomed-in image to the hash table in the tool
     _zoom_in_tool.add_image(zoomed_in_image, {"coordinates": zoomed_in_full_coordinates})
