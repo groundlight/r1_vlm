@@ -23,7 +23,29 @@ class RealIADSimpleEnv(SimpleVisionEnv):
     def get_dataset(self) -> Dataset:
         dataset = load_dataset(self.dataset_name)["train"]
         
-        # handle image injection and resizing
+        # we need to class balance the dataset, there are way more ok samples than any other class, which causes the model to overfit to the ok class when training
+        
+        # Count samples per class
+        label_counts = dataset.select_columns(['label']).to_pandas()['label'].value_counts()
+    
+        # Calculate average anomaly count
+        anomaly_classes = ['missing parts', 'pit', 'scratch', 'contamination']
+        anomaly_counts = [label_counts.get(cls, 0) for cls in anomaly_classes]
+        avg_anomaly_count = sum(anomaly_counts) / len(anomaly_classes)
+        
+        
+        # Filter ok samples to match average anomaly count
+        ok_indices = [i for i, label in enumerate(dataset['label']) if label == 'ok']
+        keep_ok_indices = ok_indices[:int(avg_anomaly_count)]
+        non_ok_indices = [i for i, label in enumerate(dataset['label']) if label != 'ok']
+        
+        # Combine indices and filter dataset
+        keep_indices = keep_ok_indices + non_ok_indices
+        dataset = dataset.select(keep_indices)
+        
+        print(f"After balancing: {dataset.select_columns(['label']).to_pandas()['label'].value_counts()}")
+        
+        # Handle image injection and resizing
         dataset = preprocess_r1_dataset(dataset, image_size=(400, 400))
         return dataset
     
@@ -135,9 +157,20 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             float: The sum of a valid box reward and a IOU reward - total reward is between 0 and 1.
         '''
         
-        # unpack the boxes
+        # unpack the boxes. The proposed box should have 4 values in it. If it doesn't, no reward (to protect against unpacking errors.)
+        if len(proposed_box) != 4:
+            return 0.0
+        
         proposed_box_x1, proposed_box_y1, proposed_box_x2, proposed_box_y2 = proposed_box
-        true_box_x1, true_box_y1, true_box_x2, true_box_y2 = true_box
+        
+        if not isinstance(proposed_box_x1, float) or not isinstance(proposed_box_y1, float) or not isinstance(proposed_box_x2, float) or not isinstance(proposed_box_y2, float):
+            return 0.0
+        
+        
+        try:
+            true_box_x1, true_box_y1, true_box_x2, true_box_y2 = true_box
+        except Exception as e:
+            raise ValueError(f"Invalid ground truth box: {true_box=}") from e
         
         # check that the gt box is valid, otherwise something is very wrong
         if not (true_box_x1 < true_box_x2 and true_box_y1 < true_box_y2) or not all(0<=x<=1 for x in true_box):
@@ -245,11 +278,14 @@ class RealIADSimpleEnv(SimpleVisionEnv):
                     if proposed_box is None:
                         rewards.append(0.0)
                     else:
-                        # compute the IOU between the proposed and true boxes
-                        iou = RealIADSimpleEnv._box_reward_func_helper(proposed_box, true_box)
-                        rewards.append(iou)
+                        try:
+                            # compute the IOU between the proposed and true boxes
+                            iou_reward = RealIADSimpleEnv._box_reward_func_helper(proposed_box, true_box)
+                            rewards.append(iou_reward)
+                        except Exception as e:
+                            print(f"Error in bounding_box_reward_func: {e}")
+                            rewards.append(0.0)
                         
-                
             return rewards
         
         
