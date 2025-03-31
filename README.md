@@ -31,7 +31,7 @@ We trained a small VLM to solve cryptograms. Use the buttons below to try the mo
 
 
 # Installation
-This project relies on forks for some dependencies. First clone this repo. Then clone the following repos adjacent to this one. The two forks are installed as editable dependencies into `r1_vlm`. For each fork, we checkout the relevant release branch. This process will be improved in the future. Please leave a github issue and tag @sunildkumar if you run into any issues.
+This project relies on forks for some dependencies. First clone this repo. Then clone the following repos adjacent to this one. The two forks are installed as editable dependencies into `r1_vlm`. For each fork, we checkout the relevant release branch. This process will be improved in the future. Please leave a github issue if you run into any issues.
 ```
 # clone this repo
 git clone git@github.com:groundlight/r1_vlm.git
@@ -52,8 +52,12 @@ verifiers/
 Then install with the `uv` package manager. See the [uv docs](https://docs.astral.sh/uv/) for instructions if you don't have `uv` installed.
 ```
 cd r1_vlm
-uv pip install hatchling editables torch==2.5.1 && uv sync --no-build-isolation
+uv venv
+uv pip install hatchling editables torch==2.5.1 
+uv sync --no-build-isolation
 ```
+
+See our [Troubleshooting Installation](troubleshooting_installation.md) documentation if you run into issues.
 
 # Task 1: Message Decoding
 We trained `Qwen2.5VL-3B-Instruct` to solve short cryptograms. A cryptogram is a message that has been encoded using a substitution cipher. The model is given a coded message and a decoder image, and it must recover the original message. This task has the nice property that it is very difficult to solve without engaging with both text and image modalities - so it forces the model to use all of its capabilities. Our model achieves 96% accuracy on our eval set.
@@ -208,7 +212,6 @@ Training results:
 <p align="center">
 <img src="images/message_decoding_correctness_reward.png" alt="Message Decoding Single Word Correctness Reward" width="600"/>
 </p>
-
 
 # Acknowledgements
 - We thank @willccbb for his work on the `verifiers` [package](https://github.com/willccbb/verifiers). We loved his "environment" abstraction and take advantage of it in this project.

@@ -2,95 +2,22 @@ import numpy as np
 import PIL
 from datasets import Dataset
 from tqdm import tqdm
-
-# This file contains tools for verifying that we can do tool calling
-# 1. A tool that takes the task "recognition" or "addition" and returns the answer. It is "secretly" injected with the input data so it can do this. This proves we can do tool calling at all.
-# 2. A tool that takes the task and the image as a key in a dict. Proves we can inject image data into the tool call properly.
+from r1_vlm.tools.utils.image_hash_table import ImageHashTable
+from typing import TypedDict
 
 
-class ImageHashTableTool:
+
+class DigitData(TypedDict):
+    label: list[int]
+    total: int
+
+class DigitsAnswerTool:
     '''
-    Hash table from image to the corresponding data/answer (e.g., label and total for digits recognition and addition).
-    Each image is hashed as a sum of elementwise produce of pixels and a hash matrix of the same shape. 
-    '''
-    def __init__(self, dataset: Dataset):
-        # maps a float to a dict {label: list[int], total: int}
-        self.hash_table = {}
-        self.hash_matrix = None
-    
-    def build_hash_table(self, dataset: Dataset) -> None:
-        raise NotImplementedError("Error: build_hash_table not implemented.")
-        
-    def generate_hash_matrix(self, shape: tuple[int, int, int]) -> None:
-        '''
-        Generates a hash matrix for the image. Saves to self.hash_matrix.
-        '''
-        
-        if self.hash_matrix is not None:
-            raise ValueError("Error: Hash matrix already generated.")
-        
-        else:
-            # matrix of random floats between 0 and 1
-            self.hash_matrix = np.random.random(shape)
-        
-        
-    def hash_image(self, image: PIL.Image.Image) -> float:
-        '''
-        Hashes the image.
-        '''
-        
-        # resize the image if necessary 
-        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
-            image = image.resize(self.hash_matrix.shape[:2])
-        
-        image = np.array(image)
-        
-        if self.hash_matrix is None:
-            self.generate_hash_matrix(image.shape)
-
-        # hash the image
-        hash_value = np.sum(image * self.hash_matrix)
-        
-        return hash_value
-        
-    
-    def add_image(self, image: PIL.Image.Image, data: dict):
-        '''
-        Adds image to the hash table.
-        '''
-        # check if image's shape is the same as the hash matrix's shape. if not, resize the image to the hash matrix's shape
-        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
-            image = image.resize(self.hash_matrix.shape[:2])
-        
-        hash_value = self.hash_image(image)
-        
-        if hash_value in self.hash_table:
-            return
-        
-        self.hash_table[hash_value] = data
-        
-    
-    def lookup_image(self, image: PIL.Image.Image) -> dict[str, int | list[int]]:
-        '''
-        Looks up the image in the hash table and returns the label and total as a dict. 
-        '''
-        hash_value = self.hash_image(image)
-        
-        if hash_value not in self.hash_table:
-            print("Error: Image not found in the hash table.")
-            raise ValueError(" Error: Image not found in the hash table.")
-        
-        return self.hash_table[hash_value]
-
-class DigitsAnswerTool(ImageHashTableTool):
-    '''
-    Hash table from image to the image's label and total. 
+    Uses ImageHashTable to store and lookup digit recognition and addition results.
     '''
     def __init__(self, dataset: Dataset):
-        super().__init__(dataset)
-        
-        self.build_hash_table(dataset)
-        
+        self.hash_table = ImageHashTable()
+    
     def build_hash_table(self, dataset: Dataset) -> None:
         for example in tqdm(dataset, desc="Building hash table"):
             image = example["image"]
@@ -101,11 +28,22 @@ class DigitsAnswerTool(ImageHashTableTool):
             assert isinstance(label, list)
             assert isinstance(total, int)
             
-            self.add_image(image, {"label": label, "total": total})
+            self.add_image(image, label, total)
+    
+    def add_image(self, image: PIL.Image.Image, data: dict):
+        '''
+        Adds image to the hash table with its label and total.
+        '''
+        data: DigitData = {"label": label, "total": total}
+        self.hash_table.add_image(image, data)
+    
+    def lookup_image(self, image: PIL.Image.Image) -> DigitData:
+        '''
+        Looks up the image in the hash table and returns the label and total.
+        '''
+        return self.hash_table.lookup_image(image)
 
-        
-
-# Make digits_answer_tool accessible to get_answer
+# Make DigitsAnswerTool accessible to get_answer
 _digits_answer_tool = None
 
 def set_digits_answer_tool(tool: DigitsAnswerTool):

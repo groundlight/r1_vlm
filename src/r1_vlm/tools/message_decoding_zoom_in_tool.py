@@ -2,12 +2,12 @@ from tqdm import tqdm
 from datasets import Dataset
 from PIL import Image, ImageDraw
 from r1_vlm.datasets.message_decoding_words_and_sequences_zoom_in.message_decoding_words_and_sequences_zoom_in import get_font
-from r1_vlm.tools.digits_answer_tool import ImageHashTableTool
+from r1_vlm.tools.utils.image_hash_table import ImageHashTable
 
 
-class ImageHashZoomInTool(ImageHashTableTool):
+class ImageHashZoomInTool(ImageHashTable):
     def __init__(self, dataset: Dataset):
-        super().__init__(dataset)
+        super().__init__()
         
         self.build_hash_table(dataset)
         
