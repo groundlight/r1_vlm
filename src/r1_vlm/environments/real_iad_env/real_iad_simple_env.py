@@ -6,6 +6,7 @@ from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.utils import preprocess_r1_dataset
+from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
 
 
@@ -21,6 +22,15 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         
     def get_dataset(self) -> Dataset:
         dataset = load_dataset(self.dataset_name)["train"]
+        
+        # resizes images from 1024x1024 to 400x400
+        def resize_images(example):
+            image = example["image"]
+            example["image"] = image.resize((400, 400)) 
+            return example
+            
+        dataset = dataset.map(resize_images)
+        
         # handle image injection
         dataset = preprocess_r1_dataset(dataset)
         return dataset
@@ -86,6 +96,38 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             print(f"Error in check_format: {e}")
             return 0.0
         
+    @staticmethod
+    def check_answer_format(text: str) -> float:
+        '''
+        Given a response, check if the answer is formatted correctly.
+        
+        Valid formats:
+        1. <answer><label>ok</label></answer>
+        2. <answer><label>{defect}</label><box>[x1,y1,x2,y2]</box></answer>
+        '''
+        try:
+            # Extract answer content first
+            answer_pattern = r'<answer>([\s\S]*?)</answer>'
+            answer_match = re.search(answer_pattern, text)
+            if not answer_match:
+                return 0.0
+            
+            answer_content = answer_match.group(1)
+            
+            # Pattern for "ok" case: just a label tag with "ok"
+            ok_pattern = r'^[\s\S]*<label>[\s\n]*ok[\s\n]*</label>[\s\S]*$'
+            
+            # Pattern for defect case: label tag with content followed by box tag with coordinates
+            defect_pattern = r'^[\s\S]*<label>([^<]+)</label>[\s\S]*<box>\s*\[[\s\d\.,]+\]\s*</box>[\s\S]*$'
+            
+            if re.match(ok_pattern, answer_content) or re.match(defect_pattern, answer_content):
+                return 1.0
+            
+            return 0.0
+        
+        except Exception:
+            return 0.0
+        
     def get_rubric(self, **kwargs: Any) -> List[RewardFunc]:
         def classification_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
@@ -108,21 +150,34 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             '''
             Provides a reward if the model's output is formatted correctly - a <think> </think> section and a <answer> </answer> section.
             '''
-            print('made it to format reward func')
-            print(completions_messages[0])
             
-            return [1.0 for _ in range(len(completions_messages))]
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            texts = []
+            
+            for completion_message in merged_completion_conversations:
+                text = completion_message[0]['content'][0]['text']
+                texts.append(text)
+            
+            rewards = [RealIADSimpleEnv.check_format(text) for text in texts]
+            
+            
+            return rewards
             
         
         def answer_format_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
             The answer format is non trivial for this task. We give a reward if the model's answer is formatted exactly correct.
             '''
-            print('made it to answer format reward func')
-            print(f"There are {len(completions_messages)} completions")
-            print(completions_messages[0])
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             
-            return [1.0 for _ in range(len(completions_messages))]
+            texts = []
+            for completion_message in merged_completion_conversations:
+                text = completion_message[0]['content'][0]['text']
+                texts.append(text)
+                
+            rewards = [RealIADSimpleEnv.check_answer_format(text) for text in texts]
+   
+            return rewards
         
         
         return [format_reward_func, answer_format_reward_func]

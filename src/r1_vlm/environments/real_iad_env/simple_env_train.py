@@ -11,9 +11,6 @@ from r1_vlm.environments.real_iad_env.real_iad_simple_env import (
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "real-iad-simple-env"
 
-
-
-
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
 gradient_checkpointing = False
 
@@ -61,8 +58,8 @@ training_args = GRPOConfig(
     save_steps=20,
     save_total_limit=50,
     num_train_epochs=1,
-    per_device_train_batch_size=5,
-    num_generations=15,
+    per_device_train_batch_size=1,
+    num_generations=3,
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,

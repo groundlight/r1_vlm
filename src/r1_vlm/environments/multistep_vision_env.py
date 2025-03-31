@@ -217,7 +217,8 @@ class MultistepVisionEnv(Environment):
         
         return output
     
-    def preprocess_messages(self, prompts_messages: list[list[dict[str, Any]]], completions_messages: list[list[dict[str, Any]]]) -> list[list[dict[str, Any]]]:
+    @staticmethod
+    def preprocess_messages(prompts_messages: list[list[dict[str, Any]]], completions_messages: list[list[dict[str, Any]]]) -> list[list[dict[str, Any]]]:
         '''
         1. Combines prompts and completion messages into full conversations
         2. Removes all messages before the first assistant message, leaving only the completion
