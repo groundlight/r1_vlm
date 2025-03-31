@@ -228,7 +228,7 @@ class ToolVisionEnv(MultistepVisionEnv):
                 result = self.call_tool(tool_json=parsed.tool, messages=messages, images=images)
                 if isinstance(result, Image):
                     response = {"role": "user", "content": [
-                            {"type": "text", "text": f"<image_name> tool_result_{self._get_step_count(messages)} </image_name>"},
+                            {"type": "text", "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>"},
                             {"type": "image", "image": result},
                         ]
                     }
