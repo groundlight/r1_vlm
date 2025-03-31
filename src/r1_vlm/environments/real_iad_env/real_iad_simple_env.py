@@ -23,25 +23,16 @@ class RealIADSimpleEnv(SimpleVisionEnv):
     def get_dataset(self) -> Dataset:
         dataset = load_dataset(self.dataset_name)["train"]
         
-        # resizes images from 1024x1024 to 400x400
-        def resize_images(example):
-            image = example["image"]
-            example["image"] = image.resize((400, 400)) 
-            return example
-            
-        dataset = dataset.map(resize_images)
-        
-        # handle image injection
-        dataset = preprocess_r1_dataset(dataset)
+        # handle image injection and resizing
+        dataset = preprocess_r1_dataset(dataset, image_size=(400, 400))
         return dataset
     
     
-    def _parse_answer(self, answer_string: str) -> dict[str, str | List[float] | None] | None:
+    def _parse_answer(self, completion_message: str) -> dict[str, str | List[float] | None] | None:
         '''
-        Attempts to parse the data between <answer> </answer> tags for this particular task. 
+        Given a completion message, attempts to parse the data between <answer> </answer> tags and extract the label and box.
         
         Expected format:
-        
         1. No anomaly
         <label> ok </label>
         
@@ -49,27 +40,32 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         <label> [anomaly_class] </label> <box> [x1, y1, x2, y2] </box>
         
         Args:
-            answer_string (str): The string to parse. It should include the data between <answer> </answer> tags but not the tags themselves.
+            completion_message (str): The completion message to parse. It should include the data between <answer> </answer> tags but not the tags themselves.
             
-        Returns: None if not possible to parse, otherwise returns a dictionary:
+        Returns: a dictionary with the following keys.
             {
-                "label": str,
+                "label": str | None,
                 "box": List[float] | None
             }
         '''
-        
         try:
-            label = self.answer_parser.parse(answer_string)["label"]
-            box = self.answer_parser.parse(answer_string)["box"]
+            # get the data within the <answer> </answer> tags
+            answer_pattern = r'<answer>([\s\S]*?)</answer>'
+            answer_match = re.search(answer_pattern, completion_message)
             
-            if box:
-                box = box.strip('[]').split(',')
-                box = [float(x.strip()) for x in box]
+            # if no answer match, no label or box
+            if not answer_match:
+                return {"label": None, "box": None}
+            
+            answer_string = answer_match.group(1)
+
+            label = self.answer_parser.parse(answer_string).label
+            box = self.answer_parser.parse(answer_string).box
             
             return {"label": label, "box": box}
             
         except:
-            return None
+            return {"label": None, "box": None}
     
     def check_format(text: str) -> float:
         '''
@@ -83,13 +79,10 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         try:
             # Check if the format is correct
             answer_regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
-            tool_regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<tool>([\s\S]*?)<\/tool>$"
 
             answer_match = re.search(answer_regex, text, re.DOTALL)
-            tool_match = re.search(tool_regex, text, re.DOTALL)
 
-            if (answer_match is not None and len(answer_match.groups()) == 2) or \
-                (tool_match is not None and len(tool_match.groups()) == 2):
+            if (answer_match is not None and len(answer_match.groups()) == 2):
                 return 1.0
             return 0.0
         except Exception as e:
@@ -128,12 +121,80 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         except Exception:
             return 0.0
         
+        
+    @staticmethod
+    def _box_reward_func_helper(proposed_box: list[float], true_box: list[float]) -> float:
+        '''
+        Helper function for the bounding box reward function. Score is the sum of a valid box reward and a IOU reward.
+                
+        Args:
+            proposed_box (list[float]): The proposed bounding box represented as [x1, y1, x2, y2]
+            true_box (list[float]): The ground truth bounding box represented as [x1, y1, x2, y2]
+            
+        Returns:
+            float: The sum of a valid box reward and a IOU reward - total reward is between 0 and 1.
+        '''
+        
+        # unpack the boxes
+        proposed_box_x1, proposed_box_y1, proposed_box_x2, proposed_box_y2 = proposed_box
+        true_box_x1, true_box_y1, true_box_x2, true_box_y2 = true_box
+        
+        # check that the gt box is valid, otherwise something is very wrong
+        if not (true_box_x1 < true_box_x2 and true_box_y1 < true_box_y2) or not all(0<=x<=1 for x in true_box):
+            raise ValueError(f"Invalid ground truth box: {true_box=}")
+        
+        # check that the proposed box is valid, if it isn't no reward
+        if not (proposed_box_x1 < proposed_box_x2 and proposed_box_y1 < proposed_box_y2) or not all(0<=x<=1 for x in proposed_box):
+            return 0.0
+        
+        # get a small reward for returning a valid box
+        valid_box_reward = 0.1
+        
+        # the rest of the reward is based on the IOU
+        # calculate intersection coordinates
+        x_left = max(proposed_box_x1, true_box_x1)
+        y_top = max(proposed_box_y1, true_box_y1)
+        x_right = min(proposed_box_x2, true_box_x2)
+        y_bottom = min(proposed_box_y2, true_box_y2)
+
+        # calculate areas
+        intersection_area = max(0, x_right - x_left) * max(0, y_bottom - y_top)
+        proposed_box_area = (proposed_box_x2 - proposed_box_x1) * (proposed_box_y2 - proposed_box_y1)
+        true_box_area = (true_box_x2 - true_box_x1) * (true_box_y2 - true_box_y1)
+        union_area = proposed_box_area + true_box_area - intersection_area
+
+        # calculate IOU
+        iou = intersection_area / union_area if union_area > 0 else 0.0
+        
+        return valid_box_reward + 0.9 * iou  # Scale remaining 0.9 reward by IOU (so max reward is 1.0 rather than 1.1)
+    
     def get_rubric(self, **kwargs: Any) -> List[RewardFunc]:
         def classification_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
             Provides a reward if the model's classification is correct.
             '''
-            pass
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            texts = []
+            for completion_message in merged_completion_conversations:
+                text = completion_message[0]['content'][0]['text']
+                texts.append(text)
+            
+            # get the answers from the completion messages
+            answers = [self._parse_answer(text) for text in texts]
+            true_labels = kwargs["label"]
+            
+            rewards = []
+            for answer, true_label in zip(answers, true_labels):
+                if answer["label"] == true_label:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
+            
+            return rewards
+
+
+        
         
         def bounding_box_reward_func(prompts, completions, completions_messages, **kwargs):
             '''
@@ -143,7 +204,53 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             
             If the GT is not None, the model gets reward equal to the IOU between the proposed and ground truth bounding boxes.
             '''
-            pass
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            texts = []
+            for completion_message in merged_completion_conversations:
+                text = completion_message[0]['content'][0]['text']
+                texts.append(text)
+            
+            answers = [self._parse_answer(text) for text in texts]
+            proposed_boxes: list[str] = [answer['box'] for answer in answers]
+            
+            # convert the proposed box from a string to a list of floats
+            proposed_boxes_floats = [] 
+            for box in proposed_boxes:
+                if box is not None:
+                    try:
+                        box = eval(box, {}, {})
+                    except:
+                        box = None
+                    proposed_boxes_floats.append(box)
+                else:
+                    proposed_boxes_floats.append(None)
+                
+                
+            
+            true_boxes = kwargs["bounding_box"]
+            
+            rewards = []
+            for proposed_box, true_box in zip(proposed_boxes_floats, true_boxes):
+                
+                # handle case where there is no GT box
+                if true_box is None:
+                    if proposed_box is None:
+                        rewards.append(1.0)
+                    else:
+                        rewards.append(0.0)
+                        
+                # handle case where there is a GT box
+                else:
+                    if proposed_box is None:
+                        rewards.append(0.0)
+                    else:
+                        # compute the IOU between the proposed and true boxes
+                        iou = RealIADSimpleEnv._box_reward_func_helper(proposed_box, true_box)
+                        rewards.append(iou)
+                        
+                
+            return rewards
         
         
         def format_reward_func(prompts, completions, completions_messages, **kwargs):
@@ -180,8 +287,8 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             return rewards
         
         
-        return [format_reward_func, answer_format_reward_func]
-        #return [classification_reward_func, bounding_box_reward_func, format_reward_func, answer_format_reward_func]
+        return [format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
+   
             
             
         
