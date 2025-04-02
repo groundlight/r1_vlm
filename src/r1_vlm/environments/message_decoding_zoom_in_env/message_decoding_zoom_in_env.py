@@ -119,5 +119,31 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
             
             answers_correct = [check_answer(r, t) for r, t in zip(responses, true_decoded_messages)]
             return answers_correct
+
+        def tool_execution_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            """
+            Reward function that checks if tools were executed successfully.
+            Returns a reward based on the ratio of successful tool executions to total attempts.
+            """
+            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            def check_execution(conversation):
+                tool_attempts = 0
+                successful_executions = 0
+                
+                for i, message in enumerate(conversation):
+                    if message["role"] == "assistant":
+                        parsed = self.llm_parser.parse(message["content"][0]["text"])
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            tool_attempts += 1
+                            if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
+                                response = conversation[i + 1]["content"][0]["text"]
+                                if not response.startswith("Error:"):
+                                    successful_executions += 1
+                
+                return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
+            
+            rewards = [check_execution(conv) for conv in merged_completion_conversations]
+            return rewards
         
-        return [format_reward_func, correctness_reward_func]
+        return [format_reward_func, correctness_reward_func, tool_execution_reward_func]
