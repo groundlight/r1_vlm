@@ -42,6 +42,8 @@ def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300, qwen_resiz
     scale_factor_to_qwen_resize_factor = qwen_resize_factor / shorter_side
     scale_factor = max(scale_factor, scale_factor_to_qwen_resize_factor)
     new_image_size = (int((x2 - x1) * scale_factor), int((y2 - y1) * scale_factor))
+    # handle the downcast issue that the shorter side is less than qwen_resize_factor
+    new_image_size = (max(new_image_size[0], qwen_resize_factor), max(new_image_size[1], qwen_resize_factor))
 
     # create the new image
     new_image = Image.new("RGB", new_image_size, "white")
