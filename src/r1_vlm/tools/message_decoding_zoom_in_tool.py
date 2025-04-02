@@ -31,8 +31,9 @@ def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> tuple[I
     # get the coordinates of the bounding box
     x1, y1, x2, y2 = bbox
     valid_full_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
-    shorter_side = min(x2 - x1, y2 - y1)
-    scale_factor = image_size / shorter_side
+    # zoom-in to make the longer side of the bbox equal to the image_size
+    longer_side = max(x2 - x1, y2 - y1)
+    scale_factor = image_size / longer_side
     new_image_size = (int((x2 - x1) * scale_factor), int((y2 - y1) * scale_factor))
 
     # create the new image
