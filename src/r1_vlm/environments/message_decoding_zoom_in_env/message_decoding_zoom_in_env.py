@@ -61,12 +61,15 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
                 assistant_messages = self.get_assistant_messages(conversation)
                 
                 format_correct = [check_format(message) for message in assistant_messages]
+                # the last message should be an answer but not tool call to receive a reward
+                if len(format_correct) > 0:
+                    format_correct[-1] = check_format(assistant_messages[-1], answer_only=True)
                 format_correct = mean(format_correct)
                 rewards.append(format_correct)
                 
             return rewards
 
-        def check_format(text: str) -> float:
+        def check_format(text: str, answer_only: bool = False) -> float:
             '''
             Checks if the format is correct for a single message.
             '''
@@ -83,10 +86,17 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
                 answer_match = re.search(answer_regex, text, re.DOTALL)
                 tool_match = re.search(tool_regex, text, re.DOTALL)
 
-                if (answer_match is not None and len(answer_match.groups()) == 2) or \
-                   (tool_match is not None and len(tool_match.groups()) == 2):
-                    return 1.0
-                return 0.0
+                if answer_only:
+                    if answer_match is not None and len(answer_match.groups()) == 2:
+                        return 1.0
+                    else:
+                        return 0.0
+                else:
+                    if (answer_match is not None and len(answer_match.groups()) == 2) or \
+                    (tool_match is not None and len(tool_match.groups()) == 2):
+                        return 1.0
+                    else:
+                        return 0.0
             except Exception as e:
                 print(f"Error in check_format: {e}")
                 return 0.0
