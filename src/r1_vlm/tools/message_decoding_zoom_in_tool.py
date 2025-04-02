@@ -22,7 +22,7 @@ class ImageHashZoomInTool(ImageHashTable):
             valid_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
             self.add_image(image, {"coordinates": valid_coordinates})
 
-def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> tuple[Image.Image, dict[str, tuple[int, int, int]]]:
+def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300, qwen_resize_factor=28) -> tuple[Image.Image, dict[str, tuple[int, int, int]]]:
     """
     Given the full coordinates of the decoder image, and a bounding box representing the area of the image to zoom in on,
     return the reconstructed zoomed-in image and the zoomed-in full coordinates.
@@ -32,8 +32,12 @@ def coordinates_based_zoom_in(full_coordinates, bbox, image_size=300) -> tuple[I
     x1, y1, x2, y2 = bbox
     valid_full_coordinates = {k: v for k, v in full_coordinates.items() if v is not None}
     # zoom-in to make the longer side of the bbox equal to the image_size
+    shorter_side = min(x2 - x1, y2 - y1)
     longer_side = max(x2 - x1, y2 - y1)
+    # also need to make sure the rescaled image's shorter side is at least qwen_resize_factor
     scale_factor = image_size / longer_side
+    scale_factor_to_qwen_resize_factor = qwen_resize_factor / shorter_side
+    scale_factor = max(scale_factor, scale_factor_to_qwen_resize_factor)
     new_image_size = (int((x2 - x1) * scale_factor), int((y2 - y1) * scale_factor))
 
     # create the new image
