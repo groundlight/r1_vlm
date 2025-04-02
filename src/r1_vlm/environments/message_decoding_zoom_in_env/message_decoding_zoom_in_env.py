@@ -1,4 +1,6 @@
 import re
+import string
+import Levenshtein
 from statistics import mean
 from typing import Any, Callable
 
@@ -155,5 +157,138 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
             
             rewards = [check_execution(conv) for conv in merged_completion_conversations]
             return rewards
+
+        def chars_intermediate_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            """
+            Reward function that checks if the <chars> section is correct. Reward is proportional to 1 - edit distance.
+            """
+            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            responses = [self.llm_parser.parse(c[-1]["content"][0]["text"]).chars for c in merged_completion_conversations]
+            true_chars = kwargs["decoded_message"]
+            coded_messages = kwargs["coded_message"]
+
+            # convert true chars to the format we expect in <chars>
+            # e.g. "cat dog" -> "c a t _ d o g" or "cat" -> "c a t"
+            def format_chars(text: str) -> str:
+                words = text.split()
+                spaced_words = [" ".join(word) for word in words]
+                return " _ ".join(spaced_words)
+
+            formatted_true_chars = [format_chars(msg) for msg in true_chars]
+
+            def check_chars(response, answer, coded_message):
+                if response is None:
+                    return 0.0
+                try:
+                    response = response.strip()
+                    answer = answer.strip()
+
+                    edit_distance_answer = Levenshtein.distance(response, answer)
+                    edit_distance_coded_message = Levenshtein.distance(
+                        response, coded_message
+                    )
+
+                    # no reward if the chars data is more similar to the coded message than the answer
+                    if edit_distance_coded_message < edit_distance_answer:
+                        return 0.0
+
+                    reward = 1 - edit_distance_answer / max(len(answer), len(response))
+
+                    reward = min(max(0.0, reward), 1.0)
+
+                    return reward
+
+                except Exception:
+                    return 0.0
+
+            rewards = [
+                check_chars(r, t, c)
+                for r, t, c in zip(responses, formatted_true_chars, coded_messages)
+            ]
+            return rewards
+
+        def correctness_intermediate_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            """
+            Reward function that provides a soft reward for getting the <answer> section partially correct.
+            Gated on getting the <chars> section correct and only using chars in the decoder (plus space).
+            """
+            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            responses = [self.llm_parser.parse(c[-1]["content"][0]["text"]).answer for c in merged_completion_conversations]
+            true_decoded_messages = kwargs["decoded_message"]
+
+            def format_chars(text: str) -> str:
+                words = text.split()
+                spaced_words = [" ".join(word) for word in words]
+                return " _ ".join(spaced_words)
+
+            # the answer needs to be closer to the correct solution than the spaced out version
+            formatted_true_decoded_messages = [
+                format_chars(msg) for msg in true_decoded_messages
+            ]
+
+            def check_answer_chars(response):
+                """
+                Returns True if the response only contains characters in the decoder. False otherwise.
+                """
+                valid_characters = set(string.ascii_lowercase + " ")
+                chars_in_response = set(response)
+                return chars_in_response.issubset(valid_characters)
+
+            def check_answer(response, answer, formatted_answer):
+                if response is None:
+                    return 0.0
+
+                try:
+                    response = response.strip()
+                    answer = answer.strip()
+
+                    # the model's answer must be closer to the correct answer than the answer separated with spaces and
+                    # underscores
+                    edit_distance_response_answer = Levenshtein.distance(
+                        response, answer
+                    )
+                    edit_distance_formatted_answer_answer = Levenshtein.distance(
+                        formatted_answer, answer
+                    )
+
+                    # if the answer with spaces and underscores is more similar to the correct answer than the model's answer,
+                    # then no partial credit
+                    if (
+                        edit_distance_formatted_answer_answer
+                        <= edit_distance_response_answer
+                    ):
+                        return 0.0
+
+                    # if the response contains invalid characters, no reward
+                    if not check_answer_chars(response):
+                        return 0.0
+
+                    # otherwise compute reward
+                    reward = 1 - edit_distance_response_answer / max(
+                        len(answer), len(response)
+                    )
+
+                    reward = min(max(0.0, reward), 1.0)
+
+                    return reward
+
+                except Exception:
+                    return 0.0
+
+            rewards = [
+                check_answer(r, t, f)
+                for r, t, f in zip(
+                    responses, true_decoded_messages, formatted_true_decoded_messages
+                )
+            ]
+
+            # gate the reward on getting the <chars> section correct
+            chars_intermediate_reward = chars_intermediate_reward_func(
+                completions, **kwargs
+            )
+
+            weights = [1.0 if c == 1.0 else 0.0 for c in chars_intermediate_reward]
+
+            return [r * w for r, w in zip(rewards, weights)]
         
-        return [format_reward_func, correctness_reward_func, tool_execution_reward_func]
+        return [format_reward_func, correctness_reward_func, tool_execution_reward_func, chars_intermediate_reward_func, correctness_intermediate_reward_func]
