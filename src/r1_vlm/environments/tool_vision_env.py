@@ -1,5 +1,6 @@
 import inspect
 import json
+import traceback
 from typing import Any, Callable, Dict, List
 
 from datasets import Dataset
@@ -97,7 +98,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         
         # will be used to parse responses from the model. Each response is expected to have a "think" and either a 
         # "tool" or "answer" field.
-        self.llm_parser = XMLParser(fields=["think", ("tool", "answer")])
+        self.llm_parser = XMLParser(fields=["think", ("tool", "answer", "chars")])
         
         # will be used to format responses from the environment to return to the model. Tool responses are expected to 
         # have a "result" field.
@@ -206,6 +207,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         except json.JSONDecodeError:
             return "Error: Invalid JSON format"
         except Exception as e:
+            traceback.print_exc()
             return f"Error: {str(e)}"
     
     def env_response(self, messages: List[Dict[str, Any]], **kwargs: Any) -> list[dict[str, Any]]:
