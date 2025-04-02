@@ -44,7 +44,10 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = MessageDecodingZoomInEnv(processing_class=processor)
+vf_env = MessageDecodingZoomInEnv(
+    processing_class=processor,
+    max_steps=3,
+)
 dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 image_hash_zoom_in_tool = ImageHashZoomInTool(dataset)
@@ -82,7 +85,7 @@ training_args = GRPOConfig(
     vllm_gpu_memory_utilization=0.5,
     report_to="wandb",
     vllm_device="cuda:3",
-    limit_image_per_prompt=4,
+    limit_image_per_prompt=5,
 )
 
 
