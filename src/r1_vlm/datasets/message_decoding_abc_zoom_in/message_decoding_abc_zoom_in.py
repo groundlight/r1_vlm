@@ -113,21 +113,15 @@ def create_dataset(
     alphabet="ABC",
     min_length=1,
     max_length=5,
-    base_dir="dataset",
 ):
     """Create train and validation datasets for the decoder task"""
 
-    base_dir = os.path.abspath(base_dir)
+    image_dir = Path(__file__).parent / "images"
+    image_dir.mkdir(exist_ok=True)
 
-    def get_subdirectory(split, index):
-        """Create subdirectory path based on index (1000 files per directory)"""
-        subdir_index = index // 1000
-        # Return both the full path for saving and relative path for dataset
-        full_path = os.path.join(
-            base_dir, "images", split, f"subset_{subdir_index:03d}"
-        )
-        relative_path = os.path.join("images", split, f"subset_{subdir_index:03d}")
-        return full_path, relative_path
+    # verify that the image directory is empty
+    if len(list(image_dir.glob("*.png"))) > 0:
+        raise ValueError("Image directory is not empty")
 
     def generate_samples(num_samples, split):
         data = {
@@ -143,21 +137,22 @@ def create_dataset(
                 alphabet_str=alphabet, min_length=min_length, max_length=max_length
             )
 
-            # Get both full and relative paths
-            full_subdir, relative_subdir = get_subdirectory(split, i)
-            os.makedirs(full_subdir, exist_ok=True)
+            fpath = f"images/{i}.png"
+            full_path = image_dir / f"{i}.png"
 
-            # Save image using full path but store relative path
-            filename = f"{i:05d}.png"
-            full_path = os.path.join(full_subdir, filename)
-            relative_path = os.path.join(relative_subdir, filename)
+            # verify that the image doesn't already exist, if it does, something is wrong as we should error
+            if full_path.exists():
+                raise ValueError(f"Image {full_path} already exists")
+
+            # Use full path for saving the image
+            full_path = image_dir / f"{i}.png"
 
             image.save(full_path)
 
             data["coded_message"].append(coded_msg)
             data["decoded_message"].append(decoded_msg)
             data["mapping"].append(mapping)
-            data["file_path"].append(relative_path)
+            data["file_path"].append(fpath)
             data["image"].append(image)
             data["full_coordinates"].append(full_coordinates)
 
@@ -175,10 +170,10 @@ def create_dataset(
 
 # Example usage:
 if __name__ == "__main__":
-    dataset = create_dataset(base_dir="data/message_decoding/dataset")
+    dataset = create_dataset()
 
     api = HfApi()
-    repo_id = "sunildkumar/message-decoding-dataset"
+    repo_id = "Groundlight/message-decoding-abc-zoom-in"
 
     # Upload the dataset
     dataset.push_to_hub(repo_id, token=os.getenv("HUGGINGFACE_HUB_TOKEN"))
