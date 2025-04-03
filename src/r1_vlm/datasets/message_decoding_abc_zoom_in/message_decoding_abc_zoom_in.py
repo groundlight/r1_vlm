@@ -23,7 +23,7 @@ def generate_decoder_image(
     image_size=300,
     background_color="white",
     text_color="black",
-    font_size=4,
+    font_size=3,
     edge_padding=10,
 ):
     """
@@ -43,7 +43,10 @@ def generate_decoder_image(
     # Calculate total height needed for text
     sample_text = "A\u2192B"
     bbox = draw.textbbox((0, 0), sample_text, font=font)
+    text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
+    # randomly find the x. make sure it's not too close to the edge
+    x = random.randint(edge_padding, int(image_size - edge_padding - text_width))
 
     # Calculate spacing to distribute items evenly
     spacing = text_height + 5
@@ -52,10 +55,6 @@ def generate_decoder_image(
     current_y = random.randint(edge_padding, int(image_size - edge_padding - text_height))
     for source, target in mapping_items:
         mapping_text = f"{source}\u2192{target}"
-        bbox = draw.textbbox((0, 0), mapping_text, font=font)
-        text_width = bbox[2] - bbox[0]
-        # randomly find the x. make sure it's not too close to the edge
-        x = random.randint(edge_padding, int(image_size - edge_padding - text_width))
         draw.text((x, current_y), mapping_text, fill=text_color, font=font)
         full_coordinates[mapping_text] = (x, current_y, font_size)
         current_y += text_height + spacing
@@ -130,22 +129,22 @@ def create_dataset(
             "mapping": [],
             "file_path": [],
             "image": [],
+            "full_coordinates": [],
         }
 
+        os.makedirs(image_dir / split, exist_ok=True)
         for i in tqdm(range(num_samples), desc=f"Generating {split} samples"):
             image, decoded_msg, coded_msg, mapping, full_coordinates = generate_sample(
                 alphabet_str=alphabet, min_length=min_length, max_length=max_length
             )
 
-            fpath = f"images/{i}.png"
-            full_path = image_dir / f"{i}.png"
+            fpath = f"images/{split}/{i}.png"
+            # Use full path for saving the image
+            full_path = image_dir / f"{split}/{i}.png"
 
             # verify that the image doesn't already exist, if it does, something is wrong as we should error
             if full_path.exists():
                 raise ValueError(f"Image {full_path} already exists")
-
-            # Use full path for saving the image
-            full_path = image_dir / f"{i}.png"
 
             image.save(full_path)
 
