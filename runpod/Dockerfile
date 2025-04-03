@@ -29,8 +29,8 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN uv python install 3.12
 
 RUN git clone https://github.com/groundlight/r1_vlm.git && \
-    git clone --branch release_2025_03_06 --single-branch https://github.com/groundlight/verifiers.git && \
-    git clone --branch release_2025_03_06 --single-branch https://github.com/groundlight/trl.git
+    git clone https://github.com/groundlight/verifiers.git && \
+    git clone https://github.com/groundlight/trl.git
 
 WORKDIR /app/r1_vlm
 
