@@ -20,7 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libxmlsec1-dev \
     libffi-dev \
-    liblzma-dev && \
+    liblzma-dev \
+    nvtop && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv and python 3.12
@@ -38,4 +39,5 @@ RUN uv venv && \
     uv pip install hatchling editables psutil torch==2.5.1 && \
     uv sync --no-build-isolation
 
-CMD ["bash"]
+# cmd that keeps the container running
+CMD ["tail", "-f", "/dev/null"]

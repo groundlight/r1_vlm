@@ -54,7 +54,18 @@ docker tag "${IMAGE_NAME}" "${VERSIONED_IMAGE_NAME}"
 docker tag "${IMAGE_NAME}" "${LATEST_IMAGE_NAME}"
 
 echo "🔄 Pushing images to Docker Hub..."
-if docker push "${VERSIONED_IMAGE_NAME}" && docker push "${LATEST_IMAGE_NAME}"; then
+# Enable parallel pushing and compression
+export DOCKER_BUILDKIT=1
+export DOCKER_CLI_EXPERIMENTAL=enabled
+
+docker buildx rm builder 2>/dev/null || true
+if docker buildx create --use --name builder --driver docker-container --driver-opt network=host && \
+   docker buildx build --platform linux/amd64 \
+   --push \
+   --compress \
+   --build-arg BUILDKIT_INLINE_CACHE=1 \
+   -t "${VERSIONED_IMAGE_NAME}" \
+   -t "${LATEST_IMAGE_NAME}" .; then
     echo "✅ Successfully pushed images to Docker Hub!"
     
     # Create and push new git tag
