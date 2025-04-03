@@ -284,7 +284,7 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
 
             # gate the reward on getting the <chars> section correct
             chars_intermediate_reward = chars_intermediate_reward_func(
-                completions, **kwargs
+                prompts, completions, completions_messages, **kwargs
             )
 
             weights = [1.0 if c == 1.0 else 0.0 for c in chars_intermediate_reward]
