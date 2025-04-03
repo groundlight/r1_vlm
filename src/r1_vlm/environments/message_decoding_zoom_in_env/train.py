@@ -96,6 +96,7 @@ trainer = QwenGRPOTrainer(
     args=training_args,
     train_dataset=dataset,
     env=vf_env,
+    inputs_to_log=["decoded_message"],
 )
 
 trainer.train()
