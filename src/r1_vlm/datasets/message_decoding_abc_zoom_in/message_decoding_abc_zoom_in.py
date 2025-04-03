@@ -27,6 +27,7 @@ def generate_decoder_image(
     """
     image = Image.new("RGB", (image_size, image_size), background_color)
     draw = ImageDraw.Draw(image)
+    full_coordinates = {}
 
     # Calculate font size as a fraction of total height divided by number of items
     font_size = int(image_size / (len(mapping) * 2))
@@ -53,9 +54,10 @@ def generate_decoder_image(
         text_width = bbox[2] - bbox[0]
         x = (image_size - text_width) / 2
         draw.text((x, current_y), mapping_text, fill=text_color, font=font)
+        full_coordinates[mapping_text] = (x, current_y, font_size)
         current_y += text_height + spacing
 
-    return image
+    return image, full_coordinates
 
 
 def generate_sample(
@@ -97,9 +99,9 @@ def generate_sample(
     # The decoded message is obtained by applying the mapping to the coded message
     decoded_message = "".join(mapping[letter] for letter in coded_message)
 
-    image = generate_decoder_image(mapping)
+    image, full_coordinates = generate_decoder_image(mapping)
 
-    return image, decoded_message, coded_message, mapping
+    return image, decoded_message, coded_message, mapping, full_coordinates
 
 
 def create_dataset(
@@ -134,7 +136,7 @@ def create_dataset(
         }
 
         for i in tqdm(range(num_samples), desc=f"Generating {split} samples"):
-            image, decoded_msg, coded_msg, mapping = generate_sample(
+            image, decoded_msg, coded_msg, mapping, full_coordinates = generate_sample(
                 alphabet_str=alphabet, min_length=min_length, max_length=max_length
             )
 
@@ -154,6 +156,7 @@ def create_dataset(
             data["mapping"].append(mapping)
             data["file_path"].append(relative_path)
             data["image"].append(image)
+            data["full_coordinates"].append(full_coordinates)
 
         return Dataset.from_dict(data)
 
