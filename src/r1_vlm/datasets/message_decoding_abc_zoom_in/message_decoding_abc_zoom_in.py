@@ -19,7 +19,12 @@ def random_mapping(alphabet):
     return dict(zip(alphabet, shuffled))
 
 def generate_decoder_image(
-    mapping, image_size=300, background_color="white", text_color="black"
+    mapping,
+    image_size=300,
+    background_color="white",
+    text_color="black",
+    font_size=4,
+    edge_padding=10,
 ):
     """
     Generate an image showing the letter mappings.
@@ -30,7 +35,6 @@ def generate_decoder_image(
     full_coordinates = {}
 
     # Calculate font size as a fraction of total height divided by number of items
-    font_size = int(image_size / (len(mapping) * 2))
     font = get_font(font_size)
 
     mapping_items = list(mapping.items())
@@ -42,17 +46,16 @@ def generate_decoder_image(
     text_height = bbox[3] - bbox[1]
 
     # Calculate spacing to distribute items evenly
-    total_text_height = text_height * len(mapping)
-    remaining_space = image_size - total_text_height
-    spacing = remaining_space / (len(mapping) + 1)
+    spacing = text_height + 5
 
     # Start at half spacing to center everything vertically
-    current_y = spacing / 2
+    current_y = random.randint(edge_padding, int(image_size - edge_padding - text_height))
     for source, target in mapping_items:
         mapping_text = f"{source}\u2192{target}"
         bbox = draw.textbbox((0, 0), mapping_text, font=font)
         text_width = bbox[2] - bbox[0]
-        x = (image_size - text_width) / 2
+        # randomly find the x. make sure it's not too close to the edge
+        x = random.randint(edge_padding, int(image_size - edge_padding - text_width))
         draw.text((x, current_y), mapping_text, fill=text_color, font=font)
         full_coordinates[mapping_text] = (x, current_y, font_size)
         current_y += text_height + spacing
