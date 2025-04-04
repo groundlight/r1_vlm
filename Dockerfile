@@ -35,7 +35,7 @@ RUN git clone https://github.com/groundlight/r1_vlm.git && \
 WORKDIR /app/r1_vlm
 
 RUN uv venv && \
-    uv pip install hatchling editables torch==2.5.1 && \
+    uv pip install hatchling editables psutil torch==2.5.1 && \
     uv sync --no-build-isolation
 
 CMD ["bash"]
