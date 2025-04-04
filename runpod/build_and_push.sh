@@ -73,4 +73,7 @@ fi
 echo "🎉 Build and push completed successfully!"
 echo "Your images are now available at:"
 echo "- ${VERSIONED_IMAGE_NAME}"
-echo "- ${LATEST_IMAGE_NAME}" 
+echo "- ${LATEST_IMAGE_NAME}"
+
+# play terminal bell sound so we know it's done
+echo -e "\a" 

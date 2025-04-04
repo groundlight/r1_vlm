@@ -1,6 +1,6 @@
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-WORKDIR /app
+WORKDIR /workspace
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,7 +33,7 @@ RUN git clone https://github.com/groundlight/r1_vlm.git && \
     git clone https://github.com/groundlight/verifiers.git && \
     git clone https://github.com/groundlight/trl.git
 
-WORKDIR /app/r1_vlm
+WORKDIR /workspace/r1_vlm
 
 RUN uv venv && \
     uv pip install hatchling editables psutil torch==2.5.1 && \
@@ -42,5 +42,5 @@ RUN uv venv && \
 # Expose SSH port
 EXPOSE 22
 
-# cmd runpod suggests for setting up ssh over tcp. 
+# cmd runpod dockerfile provides for starting the container
 CMD ["/start.sh"]
