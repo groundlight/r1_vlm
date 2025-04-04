@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 WORKDIR /app
 
@@ -39,5 +39,8 @@ RUN uv venv && \
     uv pip install hatchling editables psutil torch==2.5.1 && \
     uv sync --no-build-isolation
 
-# cmd that keeps the container running
-CMD ["tail", "-f", "/dev/null"]
+# Expose SSH port
+EXPOSE 22
+
+# cmd runpod suggests for setting up ssh over tcp. 
+CMD ["/start.sh"]

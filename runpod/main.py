@@ -92,7 +92,7 @@ def create_floodcity_pod(
     min_upload: int = 1000,
 ):
     """
-    Creates a pod configured for Floodcity with A100 GPU.
+    Creates a pod configured to be like our Floodcity node.
     """
     return create_pod_base(
         name="floodcity_pod",
@@ -110,4 +110,4 @@ def create_floodcity_pod(
 
 
 if __name__ == "__main__":
-    create_floodcity_pod()
+    create_test_pod()
