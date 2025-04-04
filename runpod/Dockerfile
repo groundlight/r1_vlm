@@ -42,9 +42,9 @@ RUN git clone https://github.com/groundlight/r1_vlm.git && \
     git clone https://github.com/groundlight/verifiers.git && \
     git clone https://github.com/groundlight/trl.git
 
-WORKDIR /workspace/r1_vlm
 
-RUN uv venv && \
+RUN cd r1_vlm && \
+    uv venv && \
     uv pip install hatchling editables psutil torch==2.5.1 && \
     uv sync --no-build-isolation
 
