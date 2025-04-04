@@ -1,5 +1,6 @@
 import re
 import string
+import traceback
 import Levenshtein
 from statistics import mean
 from typing import Any, Callable
@@ -13,7 +14,7 @@ from r1_vlm.environments.tool_vision_env import ToolVisionEnv
 from r1_vlm.tools.message_decoding_zoom_in_tool import zoom_in
 
 
-class MessageDecodingZoomInEnv(ToolVisionEnv):
+class MessageDecodingABCZoomInEnv(ToolVisionEnv):
     def __init__(self,
                  processing_class: AutoProcessor,
                  dataset_name: str = "Groundlight/message-decoding-abc-zoom-in-r1",
@@ -166,26 +167,17 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
             merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             responses = [self.llm_parser.parse(c[-1]["content"][0]["text"]).answer for c in merged_completion_conversations]
             true_decoded_messages = kwargs["decoded_message"]
-
-            def format_chars(text: str) -> str:
-                words = text.split()
-                spaced_words = [" ".join(word) for word in words]
-                return " _ ".join(spaced_words)
-
-            # the answer needs to be closer to the correct solution than the spaced out version
-            formatted_true_decoded_messages = [
-                format_chars(msg) for msg in true_decoded_messages
-            ]
+            coded_messages = kwargs["coded_message"]
 
             def check_answer_chars(response):
                 """
                 Returns True if the response only contains characters in the decoder. False otherwise.
                 """
-                valid_characters = set(string.ascii_lowercase + " ")
+                valid_characters = set(string.ascii_uppercase + " ")
                 chars_in_response = set(response)
                 return chars_in_response.issubset(valid_characters)
 
-            def check_answer(response, answer, formatted_answer):
+            def check_answer(response, answer, coded_message):
                 if response is None:
                     return 0.0
 
@@ -193,19 +185,17 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
                     response = response.strip()
                     answer = answer.strip()
 
-                    # the model's answer must be closer to the correct answer than the answer separated with spaces and
-                    # underscores
+                    # the model's answer must be closer to the correct answer than the coded message
                     edit_distance_response_answer = Levenshtein.distance(
                         response, answer
                     )
-                    edit_distance_formatted_answer_answer = Levenshtein.distance(
-                        formatted_answer, answer
+                    edit_distance_coded_message_answer = Levenshtein.distance(
+                        coded_message, answer
                     )
-
-                    # if the answer with spaces and underscores is more similar to the correct answer than the model's answer,
+                    # if the coded message is more similar to the correct answer than the model's answer,
                     # then no partial credit
                     if (
-                        edit_distance_formatted_answer_answer
+                        edit_distance_coded_message_answer
                         <= edit_distance_response_answer
                     ):
                         return 0.0
@@ -224,12 +214,13 @@ class MessageDecodingZoomInEnv(ToolVisionEnv):
                     return reward
 
                 except Exception:
+                    traceback.print_exc()
                     return 0.0
 
             rewards = [
                 check_answer(r, t, f)
                 for r, t, f in zip(
-                    responses, true_decoded_messages, formatted_true_decoded_messages
+                    responses, true_decoded_messages, coded_messages
                 )
             ]
             return rewards
