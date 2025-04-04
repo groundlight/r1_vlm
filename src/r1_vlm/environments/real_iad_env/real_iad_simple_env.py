@@ -46,7 +46,7 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         print(f"After balancing: {dataset.select_columns(['label']).to_pandas()['label'].value_counts()}")
         
         # Handle image injection and resizing
-        dataset = preprocess_r1_dataset(dataset, image_size=(400, 400))
+        dataset = preprocess_r1_dataset(dataset, image_size=(800, 800))
         return dataset
     
     

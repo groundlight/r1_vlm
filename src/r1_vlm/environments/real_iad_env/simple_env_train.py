@@ -49,17 +49,20 @@ rubric = vf_env.get_rubric()
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
-    output_dir="vlm-r1-real-iad-simple-env",
+    output_dir="vlm-r1-real-iad-simple-env-correctness-over-format-weighted",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
     warmup_steps=0,
     logging_steps=1,
-    save_steps=20,
+    save_steps=100,
     save_total_limit=50,
     num_train_epochs=10,
-    per_device_train_batch_size=3,
-    num_generations=9,
+    per_device_train_batch_size=1,
+    num_generations=3,
+    # give higher weight to the correctness rewards over the format rewards, to hopefully encourage the model to learn the task over learning to format. 
+    #[format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
+    reward_weights = [1.0, 1.0, 5.0, 5.0],
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
