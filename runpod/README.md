@@ -23,7 +23,17 @@ Once you've created a pod, go to https://www.runpod.io/console/pods and find the
 
 ```
 ssh <runpod pod id>@ssh.runpod.io -i ~/.ssh/runpod.pem
+
+# or
+
+ssh root@<pod ip> -p <port> -i ~/.ssh/runpod.pem
 ```
 
-
-I can edit the readme from my runpod instance.
+To set up vscode, add the following to your ssh config:
+```
+Host <your_pod_instance>
+    HostName <pod ip>
+    User root
+    Port <port>
+    IdentityFile ~/.ssh/runpod.pem
+```
