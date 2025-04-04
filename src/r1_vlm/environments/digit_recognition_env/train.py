@@ -72,7 +72,7 @@ training_args = GRPOConfig(
     eval_strategy="no",
     log_completions=True,
     use_vllm=True,
-    vllm_gpu_memory_utilization=0.2,
+    vllm_gpu_memory_utilization=0.8,
     report_to="wandb",
     vllm_device="cuda:3",
 )
