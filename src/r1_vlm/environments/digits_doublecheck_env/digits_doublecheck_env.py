@@ -9,6 +9,7 @@ from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.double_check_env import DoubleCheckVisionEnv
+from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 
 
 class DigitsDoubleCheckEnv(DoubleCheckVisionEnv):
@@ -121,7 +122,7 @@ class DigitsDoubleCheckEnv(DoubleCheckVisionEnv):
 
             task = tasks[0]
             
-            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
 
             if task == "recognition":
                 return _recognition_correctness_reward_func(completion_conversations=merged_completion_conversations, **kwargs)
@@ -141,7 +142,7 @@ class DigitsDoubleCheckEnv(DoubleCheckVisionEnv):
             '''
             
             # all messages that are part of the completion
-            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             
             # average the format correctness over all model messages per completion
             rewards = []

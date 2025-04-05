@@ -7,6 +7,7 @@ from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 
 from r1_vlm.datasets.utils import preprocess_r1_dataset
+from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
 from r1_vlm.tools.digits_answer_tool import get_answer
 
@@ -74,7 +75,7 @@ class DigitsToolUseEnv(ToolVisionEnv):
             completions_messages: list of messages in the completion
             '''
             
-            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             
             rewards = []
             for conversation in merged_completion_conversations:
@@ -123,7 +124,7 @@ class DigitsToolUseEnv(ToolVisionEnv):
 
             task = tasks[0]
             
-            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
 
             if task == "recognition":
                 return _recognition_correctness_reward_func(completion_conversations=merged_completion_conversations, **kwargs)
@@ -202,7 +203,7 @@ class DigitsToolUseEnv(ToolVisionEnv):
             Reward function that checks if tools were executed successfully.
             Returns a reward based on the ratio of successful tool executions to total attempts.
             """
-            merged_completion_conversations = self.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             
             def check_execution(conversation):
                 tool_attempts = 0
