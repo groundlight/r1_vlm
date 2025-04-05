@@ -37,6 +37,10 @@ class ImageHashTable:
         Returns:
             float: Hash value for the image
         """
+        # resize the image if necessary 
+        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
+            image = image.resize(self.hash_matrix.shape[:2])
+
         image_array = np.array(image)
         
         if self.hash_matrix is None:
@@ -54,6 +58,9 @@ class ImageHashTable:
             image: PIL Image to store
             data: Data to associate with the image
         """
+        # check if image's shape is the same as the hash matrix's shape. if not, resize the image to the hash matrix's shape
+        if self.hash_matrix is not None and image.size != self.hash_matrix.shape[:2]:
+            image = image.resize(self.hash_matrix.shape[:2])
         hash_value = self.hash_image(image)
         self.hash_table[hash_value] = data
     
