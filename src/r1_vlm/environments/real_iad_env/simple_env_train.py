@@ -76,7 +76,7 @@ training_args = GRPOConfig(
     eval_strategy="no",
     log_completions=True,
     use_vllm=True,
-    vllm_gpu_memory_utilization=0.5,
+    vllm_gpu_memory_utilization=0.9,
     report_to="wandb",
     vllm_device="cuda:3",
 )
@@ -93,5 +93,5 @@ trainer = QwenGRPOTrainer(
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
 

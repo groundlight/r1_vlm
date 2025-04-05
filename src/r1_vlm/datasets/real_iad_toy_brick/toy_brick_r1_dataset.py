@@ -53,8 +53,7 @@ def generate_r1_messages(example):
         {
             "role": "user",
             "content": [
-    
-                 {"type": "image", "image": IMAGE_PLACEHOLDER}, 
+                {"type": "image", "image": IMAGE_PLACEHOLDER}, 
                 {"type": "text", "text": instruction},
             ],
         },
@@ -66,7 +65,6 @@ def generate_r1_messages(example):
         },
     ]
 
-    # Return all necessary fields
     return {
         "messages": r1_messages,
         "image": image,
@@ -76,55 +74,32 @@ def generate_r1_messages(example):
     }
 
 
-# Generator function to yield processed examples with an optional limit
-def _generate_examples(split_dataset, max_examples=None):
-    for i, example in enumerate(tqdm(split_dataset, desc="Processing examples")):
-        if max_examples is not None and i >= max_examples:
-            print(f"\nStopping after processing {max_examples} examples for this split.")
-            break
-        yield generate_r1_messages(example)
-
-
 def create_r1_toy_brick_dataset(max_examples_per_split=None):
-    features = Features(
-        {
-            "messages": Sequence(feature={
-                'role': Value(dtype='string'),
-                'content': Sequence(feature={
-                    'type': Value(dtype='string'),
-                    'text': Value(dtype='string'),
-                    'image': Value(dtype='string'),
-                })
-            }),
-            "image": Image(decode=True),
-            "anomaly_class": Value(dtype="string"),
-            "bounding_box": Sequence(
-                feature=Value(dtype="float32")
-            ),
-            "label": Value(dtype="string"),
-        }
-    )
-
-    # Load the original dataset
     print("Loading original dataset...")
     dataset = load_dataset(
-        "Groundlight/real-iad-toy-brick", token=os.getenv("HUGGINGFACE_HUB_TOKEN")
+        "Groundlight/real-iad-toy-brick", 
+        token=os.getenv("HUGGINGFACE_HUB_TOKEN")
     )
     print("Original dataset loaded.")
 
     processed_datasets = {}
     for split in dataset.keys():
-        print(f"Processing {split} split using generator...")
+        print(f"Processing {split} split...")
+        examples = []
+        
+        # Get the dataset for this split
+        split_dataset = dataset[split]
+        
+        # If max_examples is set, limit the dataset
+        if max_examples_per_split is not None:
+            split_dataset = split_dataset.select(range(min(max_examples_per_split, len(split_dataset))))
+        
+        # Process each example
+        for example in tqdm(split_dataset, desc=f"Processing {split} examples"):
+            processed_example = generate_r1_messages(example)
+            examples.append(processed_example)
 
-        processed_datasets[split] = Dataset.from_generator(
-            _generate_examples,
-            features=features,  
-
-            gen_kwargs={
-                "split_dataset": dataset[split],
-                "max_examples": max_examples_per_split,
-            },
-        )
+        processed_datasets[split] = Dataset.from_list(examples)
         print(f"Finished processing {split} split.")
 
     return DatasetDict(processed_datasets)
