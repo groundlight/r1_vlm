@@ -1,12 +1,12 @@
 import os
 
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from trl import GRPOConfig, ModelConfig
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 from r1_vlm.environments.real_iad_env.real_iad_simple_env import (
     RealIADSimpleEnv,
 )
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "real-iad-simple-env"
@@ -41,7 +41,7 @@ processor = AutoProcessor.from_pretrained(
 )
 
 vf_env = RealIADSimpleEnv(processing_class=processor)
-dataset = vf_env.get_dataset()
+train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 
 
@@ -87,7 +87,7 @@ trainer = QwenGRPOTrainer(
     processing_class=processor,
     reward_funcs=rubric,
     args=training_args,
-    train_dataset=dataset,
+    train_dataset=train_dataset,
     env=vf_env,
 )
 
