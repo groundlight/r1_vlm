@@ -1,0 +1,3 @@
+[] move from 0-1 to absolute pixel coordinates
+[] true train test splits
+[] Move to zero3 so I can train in full resolution 

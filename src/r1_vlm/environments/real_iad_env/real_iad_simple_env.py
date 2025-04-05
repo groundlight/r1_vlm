@@ -2,12 +2,12 @@ import re
 from typing import Any, List
 
 from datasets import Dataset, load_dataset
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 
 class RealIADSimpleEnv(SimpleVisionEnv):
@@ -19,6 +19,9 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         self.dataset_name = dataset
         self.parser = XMLParser(fields=["think", "answer"])
         self.answer_parser = XMLParser(fields=["label", "box"])
+        
+        # we will resize the images to this resolution prior to training
+        self.image_size = (800, 800)
         
     def get_dataset(self) -> Dataset:
         dataset = load_dataset(self.dataset_name)["train"]
@@ -45,8 +48,27 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         
         print(f"After balancing: {dataset.select_columns(['label']).to_pandas()['label'].value_counts()}")
         
+        # Convert normalized bounding boxes to pixel coordinates
+        def convert_bbox(example):
+            bbox = example['bounding_box']
+            if bbox is None:
+                return {'bounding_box': None}
+            
+            width, height = self.image_size
+            # Convert from normalized [0,1] to pixel coordinates and round to nearest int
+            x1, y1, x2, y2 = bbox
+            pixel_bbox = [
+                round(x1 * width),  # x1
+                round(y1 * height), # y1
+                round(x2 * width),  # x2
+                round(y2 * height)  # y2
+            ]
+            return {'bounding_box': pixel_bbox}
+            
+        dataset = dataset.map(convert_bbox)
+        
         # Handle image injection and resizing
-        dataset = preprocess_r1_dataset(dataset, image_size=(800, 800))
+        dataset = preprocess_r1_dataset(dataset, image_size=self.image_size)
         return dataset
     
     
@@ -145,13 +167,14 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         
         
     @staticmethod
-    def _box_reward_func_helper(proposed_box: list[float], true_box: list[float]) -> float:
+    def _box_reward_func_helper(proposed_box: list[float], true_box: list[float], image_size: tuple[int, int]) -> float:
         '''
         Helper function for the bounding box reward function. Score is the sum of a valid box reward and a IOU reward.
                 
         Args:
             proposed_box (list[float]): The proposed bounding box represented as [x1, y1, x2, y2]
             true_box (list[float]): The ground truth bounding box represented as [x1, y1, x2, y2]
+            image_size (tuple[int, int]): The size of the image as (width, height)
             
         Returns:
             float: The sum of a valid box reward and a IOU reward - total reward is between 0 and 1.
@@ -166,18 +189,19 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         if not isinstance(proposed_box_x1, float) or not isinstance(proposed_box_y1, float) or not isinstance(proposed_box_x2, float) or not isinstance(proposed_box_y2, float):
             return 0.0
         
-        
         try:
             true_box_x1, true_box_y1, true_box_x2, true_box_y2 = true_box
         except Exception as e:
             raise ValueError(f"Invalid ground truth box: {true_box=}") from e
         
+        width, height = image_size
+        
         # check that the gt box is valid, otherwise something is very wrong
-        if not (true_box_x1 < true_box_x2 and true_box_y1 < true_box_y2) or not all(0<=x<=1 for x in true_box):
+        if not (true_box_x1 < true_box_x2 and true_box_y1 < true_box_y2) or not all(0<=x<=width for x in [true_box_x1, true_box_x2]) or not all(0<=y<=height for y in [true_box_y1, true_box_y2]):
             raise ValueError(f"Invalid ground truth box: {true_box=}")
         
         # check that the proposed box is valid, if it isn't no reward
-        if not (proposed_box_x1 < proposed_box_x2 and proposed_box_y1 < proposed_box_y2) or not all(0<=x<=1 for x in proposed_box):
+        if not (proposed_box_x1 < proposed_box_x2 and proposed_box_y1 < proposed_box_y2) or not all(0<=x<=width for x in [proposed_box_x1, proposed_box_x2]) or not all(0<=y<=height for y in [proposed_box_y1, proposed_box_y2]):
             return 0.0
         
         # get a small reward for returning a valid box
@@ -280,7 +304,7 @@ class RealIADSimpleEnv(SimpleVisionEnv):
                     else:
                         try:
                             # compute the IOU between the proposed and true boxes
-                            iou_reward = RealIADSimpleEnv._box_reward_func_helper(proposed_box, true_box)
+                            iou_reward = RealIADSimpleEnv._box_reward_func_helper(proposed_box, true_box, self.image_size)
                             rewards.append(iou_reward)
                         except Exception as e:
                             print(f"Error in bounding_box_reward_func: {e}")
