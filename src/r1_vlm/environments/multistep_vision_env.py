@@ -118,18 +118,14 @@ class MultistepVisionEnv(Environment):
                 len(state["prompt_ids"]) :
             ]
 
-            # if we are done, we truncate if necessary
+            # if we are done, we mark the state as completed
+            # we do not want to truncate the completion ids here, 
+            # because the number of image tokens returned from the tools is variable
             if (
                 self.is_completed(state["messages"])
                 or len(state["completion_ids"]) > sampling_params.max_tokens
             ):  # type: ignore
                 state["completed"] = True
-                state["completion_ids"] = state["completion_ids"][
-                    : sampling_params.max_tokens
-                ]
-                state["completion_mask"] = state["completion_mask"][
-                    : len(state["completion_ids"])
-                ]
 
             # otherwise, we get the env response
             else:

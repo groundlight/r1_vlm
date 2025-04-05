@@ -30,7 +30,7 @@ class DigitsAnswerTool:
             
             self.add_image(image, label, total)
     
-    def add_image(self, image: PIL.Image.Image, label: list[int], total: int):
+    def add_image(self, image: PIL.Image.Image, data: dict):
         '''
         Adds image to the hash table with its label and total.
         '''
