@@ -12,7 +12,7 @@ os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "real-iad-simple-env"
 
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
-gradient_checkpointing = False
+gradient_checkpointing = True
 
 
 model_config = ModelConfig(
@@ -57,12 +57,12 @@ training_args = GRPOConfig(
     warmup_steps=0,
     logging_steps=1,
     save_steps=100,
-    save_total_limit=50,
+    save_total_limit=3,
     #num_train_epochs=10,
     # set max steps to 5 to test the training loop
-    max_steps=5,
-    per_device_train_batch_size=1,
-    num_generations=3,
+    max_steps=2,
+    per_device_train_batch_size=2,
+    num_generations=12,
     # give higher weight to the correctness rewards over the format rewards, to hopefully encourage the model to learn the task over learning to format. 
     #[format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
     reward_weights = [1.0, 1.0, 1.0, 1.0],
@@ -81,7 +81,7 @@ training_args = GRPOConfig(
     use_vllm=True,
     vllm_gpu_memory_utilization=0.9,
     report_to="wandb",
-    vllm_device="cuda:3",
+    vllm_device="cuda:6",
 )
 
 
@@ -96,5 +96,5 @@ trainer = QwenGRPOTrainer(
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3_no_checkpointing.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only_zero3.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
 

@@ -15,12 +15,15 @@ deepspeed_config:
     contiguous_gradients: true
   bf16:
     enabled: true
+  activation_checkpointing:
+    partition_activations: true
+    contiguous_memory_optimization: true
 downcast_bf16: 'no'
 enable_cpu_affinity: false
 machine_rank: 0
 main_training_function: main
 num_machines: 1
-num_processes: 3
+num_processes: 6
 rdzv_backend: static
 same_network: true
 tpu_env: []
