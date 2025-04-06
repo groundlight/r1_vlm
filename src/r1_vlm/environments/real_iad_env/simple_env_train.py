@@ -49,7 +49,8 @@ rubric = vf_env.get_rubric()
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
-    output_dir="vlm-r1-real-iad-simple-env",
+    # save path on the runpod instance
+    output_dir="/workspace/r1_vlm/vlm-r1-real-iad-simple-env",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
@@ -57,7 +58,9 @@ training_args = GRPOConfig(
     logging_steps=1,
     save_steps=100,
     save_total_limit=50,
-    num_train_epochs=10,
+    #num_train_epochs=10,
+    # set max steps to 5 to test the training loop
+    max_steps=5,
     per_device_train_batch_size=1,
     num_generations=3,
     # give higher weight to the correctness rewards over the format rewards, to hopefully encourage the model to learn the task over learning to format. 

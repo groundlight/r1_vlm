@@ -27,7 +27,8 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         self.answer_parser = XMLParser(fields=["label", "box"])
 
         # we will resize the images to this resolution prior to training
-        self.image_size = (800, 800)
+        # 1024x1024 is the native resolution of the images
+        self.image_size = (1024, 1024)
 
     def get_dataset(self) -> tuple[Dataset, Dataset]:
         """
