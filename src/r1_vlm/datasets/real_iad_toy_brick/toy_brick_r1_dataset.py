@@ -4,10 +4,6 @@ import os
 from datasets import (
     Dataset,
     DatasetDict,
-    Features,
-    Image,
-    Sequence,
-    Value,
     load_dataset,
 )
 from tqdm import tqdm
