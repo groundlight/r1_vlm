@@ -20,6 +20,9 @@ export XDG_CONFIG_HOME="/workspace/.config"
 echo "Authenticating with GitHub..."
 gh auth login -p https -w
 
+# Configure git to use GitHub CLI as credential helper
+git config --global --file /workspace/.gitconfig/config credential.helper "!/usr/bin/gh auth git-credential"
+
 # Configure git globals if not set, storing in /workspace
 if [ -z "$(git config --global user.name)" ]; then
     echo "Setting up git globals..."
@@ -51,8 +54,9 @@ chmod 644 /workspace/.ssh/id_ed25519.pub
 # Setup Weights & Biases
 echo -e "\nSetting up Weights & Biases..."
 if [ ! -f /workspace/.config/wandb/settings ]; then
+    read -p "Enter your Weights & Biases API key: " wandb_key
     # Login to wandb with the API key
-    uv run wandb login "$wandb_key"
+    wandb login "$wandb_key"
     # Move the wandb config to persistent storage and create symlink
     mv ~/.config/wandb/settings /workspace/.config/wandb/ 2>/dev/null || true
     ln -sf /workspace/.config/wandb/settings ~/.config/wandb/settings
