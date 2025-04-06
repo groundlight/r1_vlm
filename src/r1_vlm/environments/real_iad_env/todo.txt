@@ -1,3 +1,4 @@
 [x] move from 0-1 to absolute pixel coordinates
 [x] true train test splits
-[] Move to zero3 so I can train in full resolution 
+[x] Move to zero3 so I can train in full resolution 
+[x]] fix r1 dataset prompt

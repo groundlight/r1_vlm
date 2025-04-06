@@ -29,11 +29,11 @@ def generate_r1_messages(example):
     
     Please classify the block into one of these categories: [missing parts, pit, scratch, contamination, ok].
 
-    If the block is not ok, please determine the smallest bounding box that contains the entire defect. Express this bounding box using normalized coordinates (as floats from 0 to 1) [x_min, y_min, x_max, y_max].
+    If the block is not ok, please determine the smallest bounding box that contains the entire defect. Express this bounding box as [x_min, y_min, x_max, y_max].
     
     How to express your answer (include <label> and <box> tags as appropriate):
     1. If the block is ok, <answer> <label> ok </label> </answer>.
-    2. If the block has a scratch, <answer> <label> scratch </label> <box> [x_min, y_min, x_max, y_max] </box> </answer>.
+    2. If the block has a defect, <answer> <label> <defect_type_here> </label> <box> [x_min, y_min, x_max, y_max] </box> </answer>.
     """
 
     r1_messages = [
