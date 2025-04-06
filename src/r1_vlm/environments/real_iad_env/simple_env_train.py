@@ -58,12 +58,9 @@ training_args = GRPOConfig(
     logging_steps=1,
     save_steps=100,
     save_total_limit=3,
-    #num_train_epochs=10,
-    # set max steps to 5 to test the training loop
-    max_steps=2,
+    num_train_epochs=10,
     per_device_train_batch_size=2,
     num_generations=12,
-    # give higher weight to the correctness rewards over the format rewards, to hopefully encourage the model to learn the task over learning to format. 
     #[format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
     reward_weights = [1.0, 1.0, 1.0, 1.0],
     gradient_accumulation_steps=4,
