@@ -49,7 +49,7 @@ rubric = vf_env.get_rubric()
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
-    output_dir="vlm-r1-real-iad-simple-env-correctness-over-format-weighted",
+    output_dir="vlm-r1-real-iad-simple-env",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
@@ -62,7 +62,7 @@ training_args = GRPOConfig(
     num_generations=3,
     # give higher weight to the correctness rewards over the format rewards, to hopefully encourage the model to learn the task over learning to format. 
     #[format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
-    reward_weights = [1.0, 1.0, 5.0, 5.0],
+    reward_weights = [1.0, 1.0, 1.0, 1.0],
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
@@ -93,5 +93,5 @@ trainer = QwenGRPOTrainer(
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3_no_checkpointing.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
 
