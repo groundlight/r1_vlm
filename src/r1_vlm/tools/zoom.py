@@ -91,6 +91,11 @@ def zoom(
     target_width = int(target_width * scale)
     target_height = int(target_height * scale)
     
+    # Validate aspect ratio
+    aspect_ratio = max(target_width, target_height) / min(target_width, target_height)
+    if aspect_ratio > 200:
+        raise ValueError("Error: absolute aspect ratio must be smaller than 200")
+    
     output_image = cropped_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
     
     print(f"Zoom tool output image size: {output_image.size}")
