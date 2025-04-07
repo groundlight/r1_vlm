@@ -125,6 +125,83 @@ class RealIadToolEnv(ToolVisionEnv):
         assistant_messages = [message["content"][0]["text"] for message in conversation if message["role"] == "assistant"]
         return assistant_messages
     
+    
+    def _parse_answer(
+            self, completion_message: str
+        ) -> dict[str, str | list[float] | None] | None:
+            """
+            Given a completion message, attempts to parse the data between <answer> </answer> tags and extract the label and box.
+
+            Expected format:
+            1. No anomaly
+            <label> ok </label>
+
+            2. Anomaly
+            <label> [anomaly_class] </label> <box> [x1, y1, x2, y2] </box>
+
+            Args:
+                completion_message (str): The completion message to parse. It should include the data between <answer> </answer> tags but not the tags themselves.
+
+            Returns: a dictionary with the following keys.
+                {
+                    "label": str | None,
+                    "box": List[float] | None
+                }
+            """
+            try:
+                # get the data within the <answer> </answer> tags
+                answer_pattern = r"<answer>([\s\S]*?)</answer>"
+                answer_match = re.search(answer_pattern, completion_message)
+
+                # if no answer match, no label or box
+                if not answer_match:
+                    return {"label": None, "box": None}
+
+                answer_string = answer_match.group(1)
+
+                label = self.answer_parser.parse(answer_string).label
+                box = self.answer_parser.parse(answer_string).box
+
+                return {"label": label, "box": box}
+
+            except:
+                return {"label": None, "box": None}
+    
+    @staticmethod
+    def check_answer_format(text: str) -> float:
+        """
+        Given a response, check if the answer is formatted correctly.
+
+        Valid formats:
+        1. <answer><label>ok</label></answer>
+        2. <answer><label>{defect}</label><box>[x1,y1,x2,y2]</box></answer>
+        """
+        try:
+            # Extract answer content first
+            answer_pattern = r"<answer>([\s\S]*?)</answer>"
+            answer_match = re.search(answer_pattern, text)
+            if not answer_match:
+                return 0.0
+
+            answer_content = answer_match.group(1)
+
+            # Pattern for "ok" case: just a label tag with "ok"
+            ok_pattern = r"^[\s\S]*<label>[\s\n]*ok[\s\n]*</label>[\s\S]*$"
+
+            # Pattern for defect case: label tag with content followed by box tag with coordinates
+            defect_pattern = r"^[\s\S]*<label>([^<]+)</label>[\s\S]*<box>\s*\[[\s\d\.,]+\]\s*</box>[\s\S]*$"
+
+            if re.match(ok_pattern, answer_content) or re.match(
+                defect_pattern, answer_content
+            ):
+                return 1.0
+
+            return 0.0
+
+        except Exception:
+            return 0.0
+            
+    
     def get_rubric(self) -> list[RewardFunc]:
         def format_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
             '''
@@ -198,58 +275,13 @@ class RealIadToolEnv(ToolVisionEnv):
             rewards = [check_execution(conv) for conv in merged_completion_conversations]
             return rewards
         
-        def _parse_answer(
-            self, completion_message: str
-        ) -> dict[str, str | list[float] | None] | None:
-            """
-            Given a completion message, attempts to parse the data between <answer> </answer> tags and extract the label and box.
-
-            Expected format:
-            1. No anomaly
-            <label> ok </label>
-
-            2. Anomaly
-            <label> [anomaly_class] </label> <box> [x1, y1, x2, y2] </box>
-
-            Args:
-                completion_message (str): The completion message to parse. It should include the data between <answer> </answer> tags but not the tags themselves.
-
-            Returns: a dictionary with the following keys.
-                {
-                    "label": str | None,
-                    "box": List[float] | None
-                }
-            """
-            try:
-                # get the data within the <answer> </answer> tags
-                answer_pattern = r"<answer>([\s\S]*?)</answer>"
-                answer_match = re.search(answer_pattern, completion_message)
-
-                # if no answer match, no label or box
-                if not answer_match:
-                    return {"label": None, "box": None}
-
-                answer_string = answer_match.group(1)
-
-                label = self.answer_parser.parse(answer_string).label
-                box = self.answer_parser.parse(answer_string).box
-
-                return {"label": label, "box": box}
-
-            except:
-                return {"label": None, "box": None}
-            
+        
         
         def classification_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
             '''
             Provides a reward if the model's classification is correct.
             '''
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
-            
-            texts = []
-            for completion_message in merged_completion_conversations:
-                text = completion_message[0]["content"][0]["text"]
-                texts.append(text)
                 
             # select the last message in each completion (completions are conversations) 
             texts = [c[-1]["content"][0]["text"] for c in merged_completion_conversations]
@@ -267,41 +299,68 @@ class RealIadToolEnv(ToolVisionEnv):
                     rewards.append(0.0)
             
             return rewards
-
         
-        @staticmethod
-        def check_answer_format(text: str) -> float:
+        
+        
+        def bounding_box_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ):
             """
-            Given a response, check if the answer is formatted correctly.
+            Provides a reward based on the model's proposed bounding box.
 
-            Valid formats:
-            1. <answer><label>ok</label></answer>
-            2. <answer><label>{defect}</label><box>[x1,y1,x2,y2]</box></answer>
+            If the GT is None, the model gets full reward IFF no bounding box is provided.
+
+            If the GT is not None, the model gets reward equal to the IOU between the proposed and ground truth bounding boxes.
             """
-            try:
-                # Extract answer content first
-                answer_pattern = r"<answer>([\s\S]*?)</answer>"
-                answer_match = re.search(answer_pattern, text)
-                if not answer_match:
-                    return 0.0
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
 
-                answer_content = answer_match.group(1)
+            texts = [c[-1]["content"][0]["text"] for c in merged_completion_conversations]
 
-                # Pattern for "ok" case: just a label tag with "ok"
-                ok_pattern = r"^[\s\S]*<label>[\s\n]*ok[\s\n]*</label>[\s\S]*$"
+            answers = [self._parse_answer(text) for text in texts]
+            proposed_boxes: list[str] = [answer["box"] for answer in answers]
 
-                # Pattern for defect case: label tag with content followed by box tag with coordinates
-                defect_pattern = r"^[\s\S]*<label>([^<]+)</label>[\s\S]*<box>\s*\[[\s\d\.,]+\]\s*</box>[\s\S]*$"
+            # convert the proposed box from a string to a list of floats
+            proposed_boxes_floats = []
+            for box in proposed_boxes:
+                if box is not None:
+                    try:
+                        box = eval(box, {}, {})
+                    except:
+                        box = None
+                    proposed_boxes_floats.append(box)
+                else:
+                    proposed_boxes_floats.append(None)
 
-                if re.match(ok_pattern, answer_content) or re.match(
-                    defect_pattern, answer_content
-                ):
-                    return 1.0
+            true_boxes = kwargs["bounding_box"]
 
-                return 0.0
+            rewards = []
+            for proposed_box, true_box in zip(proposed_boxes_floats, true_boxes):
+                # handle case where there is no GT box
+                if true_box is None:
+                    if proposed_box is None:
+                        rewards.append(1.0)
+                    else:
+                        rewards.append(0.0)
 
-            except Exception:
-                return 0.0
+                # handle case where there is a GT box
+                else:
+                    if proposed_box is None:
+                        rewards.append(0.0)
+                    else:
+                        try:
+                            # compute the IOU between the proposed and true boxes
+                            iou_reward = RealIadToolEnv._box_reward_func_helper(
+                                proposed_box, true_box, self.image_size
+                            )
+                            rewards.append(iou_reward)
+                        except Exception as e:
+                            print(f"Error: {e} in bounding_box_reward_func")
+                            rewards.append(0.0)
+
+            return rewards
+
         
         def answer_format_reward_func(
             prompts, completions, completions_messages, **kwargs
@@ -319,10 +378,5 @@ class RealIadToolEnv(ToolVisionEnv):
             rewards = [RealIadToolEnv.check_answer_format(text) for text in texts]
 
             return rewards
-    
-    
-            
-        
-        
-        
-        return [format_reward_func, answer_format_reward_func, tool_execution_reward_func, classification_reward_func, ]
+
+        return [format_reward_func, answer_format_reward_func, tool_execution_reward_func, classification_reward_func, bounding_box_reward_func]
