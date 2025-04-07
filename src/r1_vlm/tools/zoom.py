@@ -23,7 +23,7 @@ def zoom(
 
     Examples:
         <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [250, 100, 300, 150], "magnification": 1.0}}</tool>
-        <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [130, 463, 224, 556], "magnification": 2.4}}</tool>
+        <tool>{"name": "zoom", "args": {"image_name": "tool_result_1", "bbox": [130, 463, 224, 556], "magnification": 2.4}}</tool>
     """
     # get and validate the image
     images = kwargs["images"]
@@ -78,7 +78,7 @@ def zoom(
     
     # Calculate target size with size constraints
     MIN_SIZE = 28
-    MAX_SIZE = (300, 300)
+    MAX_SIZE = (400, 400)
     
     target_width = int((x_max - x_min) * magnification)
     target_height = int((y_max - y_min) * magnification)

@@ -3,6 +3,7 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import imgcat
 from datasets import Dataset
 from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
@@ -193,6 +194,7 @@ class MultistepVisionEnv(Environment):
         
         def clean_messages_for_logging(messages):
             cleaned = []
+            images = []
             for message in messages:
                 cleaned_message = message.copy()
                 if "content" in cleaned_message:
@@ -200,16 +202,21 @@ class MultistepVisionEnv(Environment):
                     for item in cleaned_message["content"]:
                         cleaned_item = item.copy()
                         if "image" in cleaned_item and cleaned_item["image"] is not None:
+                            images.append(cleaned_item["image"])
                             cleaned_item["image"] = "<PIL.Image object>"
                         cleaned_content.append(cleaned_item)
                     cleaned_message["content"] = cleaned_content
                 cleaned.append(cleaned_message)
-            return cleaned
+            return cleaned, images
+
+        cleaned_messages, images = clean_messages_for_logging(states[0]["messages"])
 
         self.logger.info(
             "Full conversation 0:\n"
-            + json.dumps(clean_messages_for_logging(states[0]["messages"]), indent=4)
+            + json.dumps(cleaned_messages, indent=4)
         )
+        for image in images:
+            imgcat.imgcat(image)
         
         return output
     
