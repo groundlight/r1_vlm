@@ -21,7 +21,6 @@ def generate_zoom_in_decoder_image(
     text_color="black",
     large_font_size=20,
     small_font_size=4,
-    font_size_variation=1,
     small_mappings_keys=[],
 ):
     """
@@ -65,10 +64,6 @@ def generate_zoom_in_decoder_image(
             # If using random_size, we will also randomly shift the text in the cell, but making sure it's still inside the cell
             text_x = x - text_width // 2
             text_y = y - text_height // 2
-            x_shift = random.randint(-grid_width // 4, grid_width // 4)
-            y_shift = random.randint(-grid_height // 4, grid_height // 4)
-            text_x += x_shift
-            text_y += y_shift
 
             draw.text((text_x, text_y), mapping_text, fill=text_color, font=large_font)
             full_coordinates[mapping_text] = (text_x, text_y, large_font_size)
@@ -87,8 +82,8 @@ def generate_zoom_in_decoder_image(
             # Center text in cell
             source_text_x = x - source_text_width // 2
             source_text_y = y - source_text_height // 2
-            target_text_x = x + source_text_width - target_text_width // 2
-            target_text_y = source_text_y
+            target_text_x = x + source_text_width // 2 - target_text_width // 2 # relatively closer to the source text
+            target_text_y = y - target_text_height // 2 + source_text_height
 
             draw.text((source_text_x, source_text_y), source_text, fill=text_color, font=large_font)
             draw.text((target_text_x, target_text_y), target_text, fill=text_color, font=small_font)
@@ -108,11 +103,6 @@ def generate_zoom_in_decoder_image(
         bottom_x = (image_size - text_width) // 2
         bottom_y = (5 * grid_height) + 10  # 10px padding after grid
 
-        x_shift = random.randint(-grid_width // 4, grid_width // 4)
-        y_shift = random.randint(-grid_height // 4, 0) # we don't want the bottom text to shift to the bottom further
-        bottom_x += x_shift
-        bottom_y += y_shift
-
         draw.text((bottom_x, bottom_y), bottom_text, fill=text_color, font=font)
         full_coordinates[bottom_text] = (bottom_x, bottom_y, large_font_size)
     else:
@@ -130,8 +120,8 @@ def generate_zoom_in_decoder_image(
         # Center text in cell
         source_text_x = x - source_text_width // 2
         source_text_y = y - source_text_height // 2
-        target_text_x = x + source_text_width - target_text_width // 2
-        target_text_y = source_text_y
+        target_text_x = x + source_text_width // 2 - target_text_width // 2 # relatively closer to the source text
+        target_text_y = y - target_text_height // 2 + source_text_height
 
         draw.text((source_text_x, source_text_y), source_text, fill=text_color, font=large_font)
         draw.text((target_text_x, target_text_y), target_text, fill=text_color, font=small_font)
@@ -174,7 +164,6 @@ def create_sample(example):
         image_size=300,
         large_font_size=20,
         small_font_size=2,
-        font_size_variation=1,
         small_mappings_keys=small_mappings_keys,
     )
     
