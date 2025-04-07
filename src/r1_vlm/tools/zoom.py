@@ -78,7 +78,7 @@ def zoom(
     
     # Calculate target size with size constraints
     MIN_SIZE = 28
-    MAX_SIZE = (400, 400)
+    MAX_SIZE = (300, 300)
     
     target_width = int((x_max - x_min) * magnification)
     target_height = int((y_max - y_min) * magnification)
@@ -94,8 +94,12 @@ def zoom(
         scale = min(MAX_SIZE[0] / target_width, MAX_SIZE[1] / target_height)
         target_width = int(target_width * scale)
         target_height = int(target_height * scale)
+    
+    output_image = cropped_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    
+    print(f"Zoom tool output image size: {output_image.size}")
 
-    return cropped_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    return output_image
 
 
 

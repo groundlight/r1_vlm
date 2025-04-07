@@ -26,6 +26,10 @@ def display_bounding_box(image_name: str, bbox: list[int], **kwargs) -> Image.Im
         raise ValueError(
             f"Error: Image {image_name} not found. Valid image names are: {valid_image_names}"
         )
+        
+    # we must make a copy to avoid modifying the original image
+    image = image.copy()
+    
     
     width, height = image.size
     

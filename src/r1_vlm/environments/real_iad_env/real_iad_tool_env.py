@@ -10,6 +10,7 @@ from verifiers.parsers import XMLParser
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
+from r1_vlm.tools.display_bounding_box import display_bounding_box
 from r1_vlm.tools.zoom import zoom
 
 
@@ -21,7 +22,7 @@ class RealIadToolEnv(ToolVisionEnv):
     def __init__(self,
                  processing_class: AutoProcessor,
                  dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
-                 tools: list[Callable] = [zoom],
+                 tools: list[Callable] = [zoom, display_bounding_box],
                  max_steps: int = 3,
                  ):
         
@@ -35,7 +36,7 @@ class RealIadToolEnv(ToolVisionEnv):
         # we will resize the input images to this resolution prior to training
         # 1024x1024 is the native resolution of the images
         # TODO: increase this to 1024x1024 on more GPUs
-        self.image_size = (400, 400)
+        self.image_size = (300, 300)
         
         
         self.parser = XMLParser(fields=["think", "answer"])
@@ -197,4 +198,131 @@ class RealIadToolEnv(ToolVisionEnv):
             rewards = [check_execution(conv) for conv in merged_completion_conversations]
             return rewards
         
-        return [format_reward_func, tool_execution_reward_func]
+        def _parse_answer(
+            self, completion_message: str
+        ) -> dict[str, str | list[float] | None] | None:
+            """
+            Given a completion message, attempts to parse the data between <answer> </answer> tags and extract the label and box.
+
+            Expected format:
+            1. No anomaly
+            <label> ok </label>
+
+            2. Anomaly
+            <label> [anomaly_class] </label> <box> [x1, y1, x2, y2] </box>
+
+            Args:
+                completion_message (str): The completion message to parse. It should include the data between <answer> </answer> tags but not the tags themselves.
+
+            Returns: a dictionary with the following keys.
+                {
+                    "label": str | None,
+                    "box": List[float] | None
+                }
+            """
+            try:
+                # get the data within the <answer> </answer> tags
+                answer_pattern = r"<answer>([\s\S]*?)</answer>"
+                answer_match = re.search(answer_pattern, completion_message)
+
+                # if no answer match, no label or box
+                if not answer_match:
+                    return {"label": None, "box": None}
+
+                answer_string = answer_match.group(1)
+
+                label = self.answer_parser.parse(answer_string).label
+                box = self.answer_parser.parse(answer_string).box
+
+                return {"label": label, "box": box}
+
+            except:
+                return {"label": None, "box": None}
+            
+        
+        def classification_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            '''
+            Provides a reward if the model's classification is correct.
+            '''
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            texts = []
+            for completion_message in merged_completion_conversations:
+                text = completion_message[0]["content"][0]["text"]
+                texts.append(text)
+                
+            # select the last message in each completion (completions are conversations) 
+            texts = [c[-1]["content"][0]["text"] for c in merged_completion_conversations]
+            
+            answers = [self._parse_answer(text) for text in texts]
+            
+            true_labels = kwargs["label"]
+            
+            rewards = []
+            
+            for answer, true_label in zip(answers, true_labels):
+                if answer["label"] == true_label:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
+            
+            return rewards
+
+        
+        @staticmethod
+        def check_answer_format(text: str) -> float:
+            """
+            Given a response, check if the answer is formatted correctly.
+
+            Valid formats:
+            1. <answer><label>ok</label></answer>
+            2. <answer><label>{defect}</label><box>[x1,y1,x2,y2]</box></answer>
+            """
+            try:
+                # Extract answer content first
+                answer_pattern = r"<answer>([\s\S]*?)</answer>"
+                answer_match = re.search(answer_pattern, text)
+                if not answer_match:
+                    return 0.0
+
+                answer_content = answer_match.group(1)
+
+                # Pattern for "ok" case: just a label tag with "ok"
+                ok_pattern = r"^[\s\S]*<label>[\s\n]*ok[\s\n]*</label>[\s\S]*$"
+
+                # Pattern for defect case: label tag with content followed by box tag with coordinates
+                defect_pattern = r"^[\s\S]*<label>([^<]+)</label>[\s\S]*<box>\s*\[[\s\d\.,]+\]\s*</box>[\s\S]*$"
+
+                if re.match(ok_pattern, answer_content) or re.match(
+                    defect_pattern, answer_content
+                ):
+                    return 1.0
+
+                return 0.0
+
+            except Exception:
+                return 0.0
+        
+        def answer_format_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ):
+            """
+            The answer format is non trivial for this task. We give a reward if the model's answer is formatted exactly correct.
+            """
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            # select the last message in each completion (completions are conversations) 
+            texts = [c[-1]["content"][0]["text"] for c in merged_completion_conversations]
+
+            rewards = [RealIadToolEnv.check_answer_format(text) for text in texts]
+
+            return rewards
+    
+    
+            
+        
+        
+        
+        return [format_reward_func, answer_format_reward_func, tool_execution_reward_func, classification_reward_func, ]

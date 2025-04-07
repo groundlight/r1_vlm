@@ -38,7 +38,7 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = RealIadToolEnv(processing_class=processor)
+vf_env = RealIadToolEnv(processing_class=processor, max_steps=3)
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 
@@ -64,7 +64,7 @@ training_args = GRPOConfig(
     bf16=True,
     # GRPO specific parameters
     max_prompt_length=None,  # must be None for vllm + verifiers
-    max_completion_length=1024,
+    max_completion_length=2048,
     beta=0.001,
     temperature=1.0,
     sync_ref_model=True,
