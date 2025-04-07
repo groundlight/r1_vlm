@@ -1,5 +1,5 @@
 DEFAULT_TOOL_PROMPT_TEMPLATE = """\
-You have access to the following tools to help solve problems:
+You may use each tool as many times as needed. You have access to the following tools to help solve problems: 
 
 {tool_descriptions}
 

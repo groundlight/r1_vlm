@@ -3,7 +3,8 @@ from PIL import Image, ImageDraw
 
 def display_bounding_box(image_name: str, bbox: list[int], **kwargs) -> Image.Image:
     '''
-    Displays an image with a bounding box overlaid on it.
+    Displays an image with a bounding box overlaid on it. This tool is useful to visualize a proposed bounding box
+    to ensure it is correct.
     
         Args:
         image_name: str, the name of the image to zoom in on.
@@ -66,6 +67,6 @@ def display_bounding_box(image_name: str, bbox: list[int], **kwargs) -> Image.Im
         
     # draw the bounding box
     draw = ImageDraw.Draw(image)
-    draw.rectangle([x_min, y_min, x_max, y_max], outline="red", width=2)
+    draw.rectangle([x_min, y_min, x_max, y_max], outline="red", width=3)
     
     return image

@@ -11,6 +11,7 @@ def zoom(
 ) -> Image.Image:
     """
     Returns the original image, cropped into the region specified by the bounding box, and then resized to the specified magnification.
+    This tool is useful to see a portion of an image in more detail. 
 
     Args:
         image_name: str, the name of the image to zoom in on.
