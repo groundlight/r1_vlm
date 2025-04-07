@@ -349,7 +349,7 @@ class RealIadToolEnv(ToolVisionEnv):
                             tool_attempts += 1
                             if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
                                 response = conversation[i + 1]["content"][0]["text"]
-                                if not response.startswith("Error:"):
+                                if "Error:" not in response:
                                     successful_executions += 1
                 
                 return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
