@@ -38,7 +38,7 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = RealIadToolEnv(processing_class=processor, max_steps=3)
+vf_env = RealIadToolEnv(processing_class=processor, max_steps=5)
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 

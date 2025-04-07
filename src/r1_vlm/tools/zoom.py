@@ -83,17 +83,13 @@ def zoom(
     target_width = int((x_max - x_min) * magnification)
     target_height = int((y_max - y_min) * magnification)
     
-    # Apply minimum size constraint while maintaining aspect ratio
-    if target_width < MIN_SIZE or target_height < MIN_SIZE:
-        scale = max(MIN_SIZE / target_width, MIN_SIZE / target_height)
-        target_width = int(target_width * scale)
-        target_height = int(target_height * scale)
-    
-    # Apply maximum size constraint while maintaining aspect ratio
-    if target_width > MAX_SIZE[0] or target_height > MAX_SIZE[1]:
-        scale = min(MAX_SIZE[0] / target_width, MAX_SIZE[1] / target_height)
-        target_width = int(target_width * scale)
-        target_height = int(target_height * scale)
+    # Apply both constraints while maintaining aspect ratio
+    scale_min = max(MIN_SIZE / target_width, MIN_SIZE / target_height)
+    scale_max = min(MAX_SIZE[0] / target_width, MAX_SIZE[1] / target_height)
+    scale = max(min(scale_max, 1.0), scale_min)  # Use the most constraining scale
+
+    target_width = int(target_width * scale)
+    target_height = int(target_height * scale)
     
     output_image = cropped_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
     

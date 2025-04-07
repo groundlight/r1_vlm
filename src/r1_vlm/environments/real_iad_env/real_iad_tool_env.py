@@ -200,6 +200,88 @@ class RealIadToolEnv(ToolVisionEnv):
 
         except Exception:
             return 0.0
+    
+    @staticmethod
+    def _box_reward_func_helper(
+        proposed_box: list[float], true_box: list[float], image_size: tuple[int, int]
+    ) -> float:
+        """
+        Helper function for the bounding box reward function. Score is the sum of a valid box reward and a IOU reward.
+
+        Args:
+            proposed_box (list[float]): The proposed bounding box represented as [x1, y1, x2, y2]
+            true_box (list[float]): The ground truth bounding box represented as [x1, y1, x2, y2]
+            image_size (tuple[int, int]): The size of the image as (width, height)
+
+        Returns:
+            float: The sum of a valid box reward and a IOU reward - total reward is between 0 and 1.
+        """
+
+        # unpack the boxes. The proposed box should have 4 values in it. If it doesn't, no reward (to protect against unpacking errors.)
+        if len(proposed_box) != 4:
+            return 0.0
+
+        proposed_box_x1, proposed_box_y1, proposed_box_x2, proposed_box_y2 = (
+            proposed_box
+        )
+
+        if (
+            not isinstance(proposed_box_x1, float)
+            or not isinstance(proposed_box_y1, float)
+            or not isinstance(proposed_box_x2, float)
+            or not isinstance(proposed_box_y2, float)
+        ):
+            return 0.0
+
+        try:
+            true_box_x1, true_box_y1, true_box_x2, true_box_y2 = true_box
+        except Exception as e:
+            raise ValueError(f"Invalid ground truth box: {true_box=}") from e
+
+        width, height = image_size
+
+        # check that the gt box is valid, otherwise something is very wrong
+        if (
+            not (true_box_x1 < true_box_x2 and true_box_y1 < true_box_y2)
+            or not all(0 <= x <= width for x in [true_box_x1, true_box_x2])
+            or not all(0 <= y <= height for y in [true_box_y1, true_box_y2])
+        ):
+            raise ValueError(f"Invalid ground truth box: {true_box=}")
+
+        # check that the proposed box is valid, if it isn't no reward
+        if (
+            not (
+                proposed_box_x1 < proposed_box_x2 and proposed_box_y1 < proposed_box_y2
+            )
+            or not all(0 <= x <= width for x in [proposed_box_x1, proposed_box_x2])
+            or not all(0 <= y <= height for y in [proposed_box_y1, proposed_box_y2])
+        ):
+            return 0.0
+
+        # get a small reward for returning a valid box
+        valid_box_reward = 0.1
+
+        # the rest of the reward is based on the IOU
+        # calculate intersection coordinates
+        x_left = max(proposed_box_x1, true_box_x1)
+        y_top = max(proposed_box_y1, true_box_y1)
+        x_right = min(proposed_box_x2, true_box_x2)
+        y_bottom = min(proposed_box_y2, true_box_y2)
+
+        # calculate areas
+        intersection_area = max(0, x_right - x_left) * max(0, y_bottom - y_top)
+        proposed_box_area = (proposed_box_x2 - proposed_box_x1) * (
+            proposed_box_y2 - proposed_box_y1
+        )
+        true_box_area = (true_box_x2 - true_box_x1) * (true_box_y2 - true_box_y1)
+        union_area = proposed_box_area + true_box_area - intersection_area
+
+        # calculate IOU
+        iou = intersection_area / union_area if union_area > 0 else 0.0
+
+        return (
+            valid_box_reward + 0.9 * iou
+        )  # Scale remaining 0.9 reward by IOU (so max reward is 1.0 rather than 1.1)
             
     
     def get_rubric(self) -> list[RewardFunc]:
