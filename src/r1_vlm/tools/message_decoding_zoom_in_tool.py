@@ -93,15 +93,15 @@ def zoom_in(image_name: str, bbox: tuple[int, int, int, int], **kwargs) -> Image
         raise ValueError("ZoomInTool not initialized. Call set_zoom_in_tool first.")
 
     coordinates_names = ["x1", "y1", "x2", "y2"]
-    # check each coordinate and see if it's in the range of 0 to 1
-    invalid_bbox_coordinates = []
+    int_bbox = []
+    # check each coordinate and see if it's an integer
     for coordinate_name, coordinate_value in zip(coordinates_names, bbox):
-        if coordinate_value < 0 or coordinate_value > 1:
-            invalid_bbox_coordinates.append(coordinate_name)
+        try:
+            int_bbox.append(int(coordinate_value))
+        except ValueError:
+            raise ValueError(f"Invalid bbox coordinates: {coordinate_name}={coordinate_value} is not an integer.")
 
-    if len(invalid_bbox_coordinates) > 0:
-        raise ValueError(f"Invalid bbox coordinates: {invalid_bbox_coordinates}. The coordinates should be normalized to the image size and range from 0 to 1.")
-
+    bbox = tuple(int_bbox)
     if bbox[0] >= bbox[2]:
         raise ValueError("Invalid bbox coordinates: x1 should be less than x2.")
 
