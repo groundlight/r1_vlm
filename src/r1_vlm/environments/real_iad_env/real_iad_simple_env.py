@@ -2,12 +2,12 @@ import re
 from typing import Any, List
 
 from datasets import Dataset, load_dataset
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 
 class RealIADSimpleEnv(SimpleVisionEnv):
@@ -200,14 +200,14 @@ class RealIADSimpleEnv(SimpleVisionEnv):
 
     @staticmethod
     def _box_reward_func_helper(
-        proposed_box: list[float], true_box: list[float], image_size: tuple[int, int]
+        proposed_box: list[float | int], true_box: list[int], image_size: tuple[int, int]
     ) -> float:
         """
         Helper function for the bounding box reward function. Score is the sum of a valid box reward and a IOU reward.
 
         Args:
-            proposed_box (list[float]): The proposed bounding box represented as [x1, y1, x2, y2]
-            true_box (list[float]): The ground truth bounding box represented as [x1, y1, x2, y2]
+            proposed_box (list[float | int]): The proposed bounding box represented as [x1, y1, x2, y2], coordinates can be integers or floats
+            true_box (list[int]): The ground truth bounding box represented as [x1, y1, x2, y2], coordinates are integers
             image_size (tuple[int, int]): The size of the image as (width, height)
 
         Returns:
@@ -223,10 +223,10 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         )
 
         if (
-            not isinstance(proposed_box_x1, float)
-            or not isinstance(proposed_box_y1, float)
-            or not isinstance(proposed_box_x2, float)
-            or not isinstance(proposed_box_y2, float)
+            not isinstance(proposed_box_x1, (float, int))
+            or not isinstance(proposed_box_y1, (float, int))
+            or not isinstance(proposed_box_x2, (float, int))
+            or not isinstance(proposed_box_y2, (float, int))
         ):
             return 0.0
 
@@ -331,8 +331,8 @@ class RealIADSimpleEnv(SimpleVisionEnv):
             answers = [self._parse_answer(text) for text in texts]
             proposed_boxes: list[str] = [answer["box"] for answer in answers]
 
-            # convert the proposed box from a string to a list of floats
-            proposed_boxes_floats = []
+            # convert the proposed box from a string to a list of floats or ints
+            proposed_boxes_floats: list[list[float | int] | None] = []
             for box in proposed_boxes:
                 if box is not None:
                     try:

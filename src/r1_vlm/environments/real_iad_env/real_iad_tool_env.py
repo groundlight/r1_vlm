@@ -203,14 +203,14 @@ class RealIadToolEnv(ToolVisionEnv):
     
     @staticmethod
     def _box_reward_func_helper(
-        proposed_box: list[float], true_box: list[float], image_size: tuple[int, int]
+        proposed_box: list[float | int], true_box: list[int], image_size: tuple[int, int]
     ) -> float:
         """
         Helper function for the bounding box reward function. Score is the sum of a valid box reward and a IOU reward.
 
         Args:
-            proposed_box (list[float]): The proposed bounding box represented as [x1, y1, x2, y2]
-            true_box (list[float]): The ground truth bounding box represented as [x1, y1, x2, y2]
+            proposed_box (list[float | int]): The proposed bounding box represented as [x1, y1, x2, y2], coordinates can be integers or floats
+            true_box (list[int]): The ground truth bounding box represented as [x1, y1, x2, y2], coordinates are integers
             image_size (tuple[int, int]): The size of the image as (width, height)
 
         Returns:
@@ -226,10 +226,10 @@ class RealIadToolEnv(ToolVisionEnv):
         )
 
         if (
-            not isinstance(proposed_box_x1, float)
-            or not isinstance(proposed_box_y1, float)
-            or not isinstance(proposed_box_x2, float)
-            or not isinstance(proposed_box_y2, float)
+            not isinstance(proposed_box_x1, (float, int))
+            or not isinstance(proposed_box_y1, (float, int))
+            or not isinstance(proposed_box_x2, (float, int))
+            or not isinstance(proposed_box_y2, (float, int))
         ):
             return 0.0
 
@@ -403,22 +403,22 @@ class RealIadToolEnv(ToolVisionEnv):
             answers = [self._parse_answer(text) for text in texts]
             proposed_boxes: list[str] = [answer["box"] for answer in answers]
 
-            # convert the proposed box from a string to a list of floats
-            proposed_boxes_floats = []
+            # convert the proposed box from a string to a list
+            proposed_boxes_evaled = []
             for box in proposed_boxes:
                 if box is not None:
                     try:
                         box = eval(box, {}, {})
                     except:
                         box = None
-                    proposed_boxes_floats.append(box)
+                    proposed_boxes_evaled.append(box)
                 else:
-                    proposed_boxes_floats.append(None)
+                    proposed_boxes_evaled.append(None)
 
             true_boxes = kwargs["bounding_box"]
 
             rewards = []
-            for proposed_box, true_box in zip(proposed_boxes_floats, true_boxes):
+            for proposed_box, true_box in zip(proposed_boxes_evaled, true_boxes):
                 # handle case where there is no GT box
                 if true_box is None:
                     if proposed_box is None:
