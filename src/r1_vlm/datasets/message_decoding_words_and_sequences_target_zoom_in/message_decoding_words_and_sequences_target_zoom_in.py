@@ -82,7 +82,7 @@ def generate_zoom_in_decoder_image(
             # Center text in cell
             source_text_x = x - source_text_width // 2
             source_text_y = y - source_text_height // 2
-            target_text_x = x + source_text_width // 2 - target_text_width // 2 # relatively closer to the source text
+            target_text_x = x + source_text_width // 2 - target_text_width // 2
             target_text_y = y - target_text_height // 2 + source_text_height
 
             draw.text((source_text_x, source_text_y), source_text, fill=text_color, font=large_font)
@@ -118,15 +118,15 @@ def generate_zoom_in_decoder_image(
         target_text_height = target_bbox[3] - target_bbox[1]
         
         # Center text in cell
-        source_text_x = x - source_text_width // 2
-        source_text_y = y - source_text_height // 2
-        target_text_x = x + source_text_width // 2 - target_text_width // 2 # relatively closer to the source text
-        target_text_y = y - target_text_height // 2 + source_text_height
+        bottom_source_x = (image_size - source_text_width) // 2
+        bottom_source_y = (5 * grid_height) + 10  # 10px padding after grid
+        bottom_target_x = bottom_source_x + source_text_width - target_text_width // 2
+        bottom_target_y = bottom_source_y + source_text_height * 3 / 2 - target_text_height // 2
 
-        draw.text((source_text_x, source_text_y), source_text, fill=text_color, font=large_font)
-        draw.text((target_text_x, target_text_y), target_text, fill=text_color, font=small_font)
-        full_coordinates[source_text] = (source_text_x, source_text_y, large_font_size)
-        full_coordinates[target_text] = (target_text_x, target_text_y, small_font_size)
+        draw.text((bottom_source_x, bottom_source_y), source_text, fill=text_color, font=large_font)
+        draw.text((bottom_target_x, bottom_target_y), target_text, fill=text_color, font=small_font)
+        full_coordinates[source_text] = (bottom_source_x, bottom_source_y, large_font_size)
+        full_coordinates[target_text] = (bottom_target_x, bottom_target_y, small_font_size)
         
     return image, full_coordinates
 
