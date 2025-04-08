@@ -461,30 +461,26 @@ class RealIadToolEnv(ToolVisionEnv):
 
             return rewards
 
-        def tool_success_count_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+        def tool_attempt_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
             """
-            Reward function that gives a small fixed reward for each successful tool execution.
+            Reward function that gives a small fixed reward for each attempted tool execution.
             Unlike tool_execution_reward_func, this doesn't penalize failed attempts.
             Maximum reward is 1.0 to avoid hacking. 
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
             
             def count_successes(conversation):
-                successful_executions = 0
-                reward_per_success = 0.2  # Small reward for each success
-                
+                reward_per_success = 0.2  # Small reward for each tool attempt
+                tool_attempts = 0
                 for i, message in enumerate(conversation):
                     if message["role"] == "assistant":
                         parsed = self.llm_parser.parse(message["content"][0]["text"])
                         if hasattr(parsed, "tool") and parsed.tool is not None:
-                            if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
-                                response = conversation[i + 1]["content"][0]["text"]
-                                if "Error:" not in response:
-                                    successful_executions += 1
+                            tool_attempts += 1
                 
-                return min(successful_executions * reward_per_success, 1.0)
+                return min(tool_attempts * reward_per_success, 1.0)
 
             rewards = [count_successes(conv) for conv in merged_completion_conversations]
             return rewards
 
-        return [format_reward_func, answer_format_reward_func, tool_execution_reward_func, classification_reward_func, bounding_box_reward_func, tool_success_count_reward_func]
+        return [format_reward_func, answer_format_reward_func, tool_execution_reward_func, classification_reward_func, bounding_box_reward_func, tool_attempt_reward_func]
