@@ -69,22 +69,24 @@ def set_zoom_in_tool(tool: ImageHashZoomInTool):
     global _zoom_in_tool
     _zoom_in_tool = tool
     
-def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) -> Image.Image:
+def zoom_in(image_name: str, bbox: tuple[int, int, int, int], **kwargs) -> Image.Image:
     '''
     Returns the zoomed-in image given the image and the bounding box to zoom in on.
 
     Args:
         image_name: str, the name of the image to zoom in on.
-        bbox: tuple[float, float, float, float], the bounding box to zoom in on. The bounding box is in the format of [x1, y1, x2, y2],
-            where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner. The coordinates are normalized to the image size and range from 0 to 1.
-            Also note that a valid bbox should have x1 < x2 and y1 < y2.
+        bbox: tuple[int, int, int, int], the bounding box to zoom in on. The bounding box is in the format of [x1, y1, x2, y2],
+            where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner. 
+            The coordinates are the absolute coordinates of the bounding box. 
+            Also note that a valid bbox should have x1 < x2 and y1 < y2, 
+            and x2 should be lower than the image width and y2 should be lower than the image height.
 
     Returns:
         The zoomed-in image.
 
     Examples:
-        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [0.25, 0.30, 0.45, 0.40]}}</tool>
-        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [0.80, 0.10, 0.95, 0.25]}}</tool>
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [25, 30, 45, 40]}}</tool>
+        <tool>{"name": "zoom_in", "args": {"image_name": "input_image", "bbox": [80, 10, 95, 25]}}</tool>
 
     '''
     if _zoom_in_tool is None:
@@ -110,13 +112,19 @@ def zoom_in(image_name: str, bbox: tuple[float, float, float, float], **kwargs) 
 
     image_to_use = images.get(image_name, None)
 
+    if bbox[2] >= image_to_use.width:
+        raise ValueError(f"Invalid bbox coordinates: x2 should be less than the image width = {image_to_use.width}.")
+
+    if bbox[3] >= image_to_use.height:
+        raise ValueError(f"Invalid bbox coordinates: y2 should be less than the image height = {image_to_use.height}.")
+
     if image_to_use is None:
         raise ValueError(f"Error: Image {image_name} not found. Valid image names are: {images.keys()}")
     
     coordinates = _zoom_in_tool.lookup_image(image_to_use)["coordinates"]
 
     # convert the bbox from the normalized format to the absolute format
-    bbox = (bbox[0] * image_to_use.width, bbox[1] * image_to_use.height, bbox[2] * image_to_use.width, bbox[3] * image_to_use.height)
+    bbox = (bbox[0], bbox[1], bbox[2], bbox[3])
 
     zoomed_in_image, zoomed_in_full_coordinates = coordinates_based_zoom_in(coordinates, bbox, image_size=300)
 
