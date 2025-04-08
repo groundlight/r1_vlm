@@ -1,14 +1,6 @@
 # The Real IAD dataset is not public, so we cannot share it. However, you may email the authors for access. See instructions here: https://huggingface.co/datasets/Real-IAD/Real-IAD.
-
-# This script takes a path to a local copy of the Real IAD dataset and creates a dataset of toy brick examples.
-# Steps:
-# 1. Select the toy brick subset.
-# 2. For each example in the dataset (5 camera views), find those in which the anomaly is visible for examples with anomalies.
-# 3. Select each valid view per example.
-# 4. Compute the smallest bounding box that contains the anomaly in the selected view.
-# 5. Save the image paths, the anomaly class and the bounding box here (in r1_vlm) as a CSV.
-
 import os
+import random
 
 import cv2
 import numpy as np
@@ -205,29 +197,85 @@ def is_valid_view(*, mask_path):
 
 
 def save_to_hf(*, examples):
-    data = {
-        "image": [], 
-        "anomaly_class": [], 
-        "bounding_box": [],
-        "label": []  
-    }
 
+    # Set seeds for reproducibility
+    random.seed(42)
+    np.random.seed(42)
+    
+    # Group examples by class
+    examples_by_class = {}
     for example in examples:
-        image_path = example["image_path"]
-        image = Image.open(image_path)
-        data["image"].append(image)
-
         anomaly_class = example["anomaly_class"]
-        data["anomaly_class"].append(anomaly_class)
-        data["label"].append(classes_mapping[anomaly_class])
-
-        data["bounding_box"].append(example["bounding_box"])
-
-    dataset = Dataset.from_dict(data)
-
+        if anomaly_class not in examples_by_class:
+            examples_by_class[anomaly_class] = []
+        examples_by_class[anomaly_class].append(example)
+    
+    # Create train/test splits for each class
+    train_examples = []
+    test_examples = []
+    
+    for class_name, class_examples in examples_by_class.items():
+        # Shuffle examples
+        random.shuffle(class_examples)
+        
+        # Calculate split index (80% train)
+        split_idx = int(len(class_examples) * 0.8)
+        
+        # Split the examples
+        train_examples.extend(class_examples[:split_idx])
+        test_examples.extend(class_examples[split_idx:])
+        
+        print(f"Class {class_name}: {len(class_examples)} total, "
+              f"{len(class_examples[:split_idx])} train, "
+              f"{len(class_examples[split_idx:])} test")
+    
+    # Function to convert examples to dataset format
+    def create_dataset_dict(examples_list):
+        data = {
+            "image": [],
+            "anomaly_class": [],
+            "bounding_box": [],
+            "label": []
+        }
+        
+        # Process examples in batches to avoid too many open files
+        BATCH_SIZE = 100 
+        
+        for i in range(0, len(examples_list), BATCH_SIZE):
+            batch = examples_list[i:i + BATCH_SIZE]
+            
+            for example in batch:
+                try:
+                    with Image.open(example["image_path"]) as img:
+                        # Convert to RGB to ensure consistency
+                        image = img.convert('RGB')
+                        data["image"].append(image)
+                        
+                        anomaly_class = example["anomaly_class"]
+                        data["anomaly_class"].append(anomaly_class)
+                        data["label"].append(classes_mapping[anomaly_class])
+                        data["bounding_box"].append(example["bounding_box"])
+                except Exception as e:
+                    print(f"Error processing {example['image_path']}: {e}")
+                    continue
+            
+            print(f"Processed {min(i + BATCH_SIZE, len(examples_list))}/{len(examples_list)} examples")
+            
+        return Dataset.from_dict(data)
+    
+    # Create train and test datasets
+    train_dataset = create_dataset_dict(train_examples)
+    test_dataset = create_dataset_dict(test_examples)
+    
+    # Create DatasetDict with both splits
+    from datasets import DatasetDict
+    dataset_dict = DatasetDict({
+        "train": train_dataset,
+        "test": test_dataset
+    })
     
     # saving as a private dataset to the Groundlight account (paid), which gets us the dataset viewer. Private datasets on free accounts don't get the viewer.
-    dataset.push_to_hub(
+    dataset_dict.push_to_hub(
         "Groundlight/real-iad-toy-brick",
         token=os.getenv("HUGGINGFACE_HUB_TOKEN"),
         # Private as we don't have permission to distribute the image data. Other uses will have to download the data from the original source.
@@ -236,6 +284,7 @@ def save_to_hf(*, examples):
 
 
 if __name__ == "__main__":
+    print("Starting toy brick dataset creation...")
     real_iad_path = "/millcreek/home/sunil/dvc-datasets/external-benchmarks/NON-COMMERCIAL-ONLY/Real-IAD"
     validate_input_dataset(real_iad_path)
 

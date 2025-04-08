@@ -1,0 +1,32 @@
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: DEEPSPEED
+deepspeed_config:
+  zero_optimization:
+    stage: 3
+    zero3_init_flag: true
+    offload_optimizer:
+      device: "cpu"
+      pin_memory: true
+    offload_param:
+      device: "cpu"
+      pin_memory: true
+    stage3_gather_16bit_weights_on_model_save: true
+    contiguous_gradients: true
+  bf16:
+    enabled: true
+  activation_checkpointing:
+    partition_activations: true
+    contiguous_memory_optimization: true
+downcast_bf16: 'no'
+enable_cpu_affinity: false
+machine_rank: 0
+main_training_function: main
+num_machines: 1
+num_processes: 6
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

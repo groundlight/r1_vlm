@@ -1,15 +1,13 @@
 import os
 
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-from r1_vlm.environments.real_iad_env.real_iad_simple_env import (
-    RealIADSimpleEnv,
-)
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
+from r1_vlm.environments.real_iad_env.real_iad_tool_env import RealIadToolEnv
+
 os.environ["WANDB_ENTITY"] = "groundlightai"
-os.environ["WANDB_PROJECT"] = "real-iad-simple-env"
+os.environ["WANDB_PROJECT"] = "real-iad-tool-env"
 
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
 gradient_checkpointing = True
@@ -40,7 +38,7 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = RealIADSimpleEnv(processing_class=processor)
+vf_env = RealIadToolEnv(processing_class=processor, max_steps=5)
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 
@@ -50,25 +48,23 @@ rubric = vf_env.get_rubric()
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
     # save path on the runpod instance
-    output_dir="/workspace/r1_vlm/vlm-r1-real-iad-simple-env",
+    output_dir="vlm-r1-real-iad-tool-env",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
     warmup_steps=0,
     logging_steps=1,
     save_steps=100,
-    save_total_limit=3,
+    save_total_limit=10,
     num_train_epochs=10,
-    per_device_train_batch_size=2,
-    num_generations=12,
-    #[format_reward_func, answer_format_reward_func, classification_reward_func, bounding_box_reward_func]
-    reward_weights = [1.0, 1.0, 1.0, 1.0],
+    per_device_train_batch_size=1,
+    num_generations=3,
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
     # GRPO specific parameters
     max_prompt_length=None,  # must be None for vllm + verifiers
-    max_completion_length=1024,
+    max_completion_length=2048,
     beta=0.001,
     temperature=1.0,
     sync_ref_model=True,
@@ -78,7 +74,8 @@ training_args = GRPOConfig(
     use_vllm=True,
     vllm_gpu_memory_utilization=0.9,
     report_to="wandb",
-    vllm_device="cuda:6",
+    vllm_device="cuda:3",
+    limit_image_per_prompt=5,
 )
 
 
@@ -93,5 +90,5 @@ trainer = QwenGRPOTrainer(
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only_zero3.yaml src/r1_vlm/environments/real_iad_env/simple_env_train.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/real_iad_env/tool_env_train.py
 

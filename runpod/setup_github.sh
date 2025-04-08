@@ -25,3 +25,16 @@ if [ ! -f ~/.ssh/id_ed25519 ]; then
 fi
 
 echo "GitHub setup complete!" 
+
+# Setup Weights & Biases
+echo -e "\nSetting up Weights & Biases..."
+if [ ! -f /workspace/.config/wandb/settings ]; then
+    read -p "Enter your Weights & Biases API key: " wandb_key
+    # Login to wandb with the API key
+    wandb login "$wandb_key"
+    # Move the wandb config to persistent storage and create symlink
+    mv ~/.config/wandb/settings /workspace/.config/wandb/ 2>/dev/null || true
+    ln -sf /workspace/.config/wandb/settings ~/.config/wandb/settings
+fi
+
+echo "Weights & Biases setup complete!"
