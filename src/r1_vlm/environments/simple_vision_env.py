@@ -2,11 +2,31 @@ import json
 from typing import Any, Dict, List, Sequence, Union
 
 from qwen_vl_utils import process_vision_info
-from verifiers import SimpleEnv
 from vllm import LLM, SamplingParams  # type: ignore
+
+from r1_vlm.budget_forcing.budget_forcing import (
+    generate_completions_with_budget_forcing,
+)
+from verifiers import SimpleEnv
 
 
 class SimpleVisionEnv(SimpleEnv):
+    
+    def __init__(self, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int = 1, ignore_str: str = "Wait", **kwargs: Any):
+        '''
+        Initialize the SimpleVisionEnv.
+        
+        use_budget_forcing: bool = False, Whether to use budget forcing. If true, we will budget force the model to think more with the following parameters:
+        
+        max_thinking_tokens: int = 1024, The maximum number of tokens the model can think for.
+        
+        num_ignore: int = 1, The number of times we're willing to ignore the model trying to end thinking.
+        
+        ignore_str: str = "Wait", The string we manually add when the model tries to end thinking to promote the model to think more.
+        '''
+        super().__init__(**kwargs)
+        self.use_budget_forcing = use_budget_forcing
+    
     def generate(
         self,
         conversations,
@@ -18,6 +38,8 @@ class SimpleVisionEnv(SimpleEnv):
         custom_sp = sampling_params.clone()
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
+            
+
 
         states = [
             {
@@ -29,10 +51,19 @@ class SimpleVisionEnv(SimpleEnv):
             for conversation in conversations
         ]
 
-        # get completions
-        completions = vlm.generate(
-            vlm_inputs, sampling_params=custom_sp, use_tqdm=False
-        )  # type: ignore
+        # generate completions either through budget forcing or just using vllm directly
+        if self.use_budget_forcing:
+            completions = generate_completions_with_budget_forcing(
+                vllm_inputs=vlm_inputs,
+                vlm=vlm,
+                max_thinking_tokens=self.max_thinking_tokens,
+                num_ignore=self.num_ignore,
+                ignore_str=self.ignore_str
+            )
+        else:
+            completions = vlm.generate(
+                vlm_inputs, sampling_params=custom_sp, use_tqdm=False
+            )  # type: ignore
 
         for i, completion in enumerate(completions):
             states[i]["messages"].append(
