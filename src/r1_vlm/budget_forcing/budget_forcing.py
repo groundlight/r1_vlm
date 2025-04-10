@@ -81,7 +81,7 @@ def setup_vllm(model: Qwen2_5_VLForConditionalGeneration):
     
     return vlm
 
-def generate_completions_with_budget_forcing(vllm_inputs: list[dict], vlm: LLM, max_thinking_tokens= 1024, num_ignore = 1, ignore_str="Wait "):
+def generate_completions_with_budget_forcing(vllm_inputs: list[dict], vlm: LLM, max_thinking_tokens= 1024, num_ignore = 1, ignore_str="Wait"):
     '''
     Generate completions with budget forcing.
     
