@@ -1510,6 +1510,19 @@ wheels = [
 ]
 
 [[package]]
+name = "liger-kernel"
+version = "0.5.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "torch" },
+    { name = "triton" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cc/ca/75bfd08e935de343e4191ec374f7915cab0630f09d74f086bb0223916cb5/liger_kernel-0.5.6.tar.gz", hash = "sha256:be983852a0322a5df75ce2a7e9bd6a79d84fe440621082c0603a65f9ec03b788", size = 3586281 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/45/3d1374bd8b5c4a058d00121ba114a192187dbd3003ef0d6e5da85d77b3a5/liger_kernel-0.5.6-py3-none-any.whl", hash = "sha256:7a1a952460622a5064e73f15e86822982aa20b05b30e4329a448491e5161c17d", size = 142529 },
+]
+
+[[package]]
 name = "llvmlite"
 version = "0.43.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2795,6 +2808,7 @@ dependencies = [
     { name = "ipdb" },
     { name = "jinja2" },
     { name = "levenshtein" },
+    { name = "liger-kernel" },
     { name = "peft" },
     { name = "pillow" },
     { name = "pycocotools" },
@@ -2823,6 +2837,7 @@ requires-dist = [
     { name = "ipdb", specifier = ">=0.13.13" },
     { name = "jinja2", specifier = ">=3.1.5" },
     { name = "levenshtein", specifier = ">=0.27.1" },
+    { name = "liger-kernel", specifier = ">=0.5.6" },
     { name = "peft", specifier = ">=0.14.0" },
     { name = "pillow", specifier = ">=11.1.0" },
     { name = "pycocotools", specifier = ">=2.0.8" },
@@ -3528,7 +3543,7 @@ name = "triton"
 version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "filelock", marker = "python_full_version < '3.13' and platform_machine != 'aarch64' and sys_platform == 'linux'" },
+    { name = "filelock" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/78/eb/65f5ba83c2a123f6498a3097746607e5b2f16add29e36765305e4ac7fdd8/triton-3.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c8182f42fd8080a7d39d666814fa36c5e30cc00ea7eeeb1a2983dbb4c99a0fdc", size = 209551444 },

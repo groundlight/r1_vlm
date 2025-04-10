@@ -37,6 +37,7 @@ dependencies = [
     "pillow>=11.1.0",
     "runpod>=1.7.7",
     "pytest>=8.3.5",
+    "liger-kernel>=0.5.6",
 ]
 
 [tool.hatch.metadata]

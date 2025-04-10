@@ -1,10 +1,11 @@
 from unittest.mock import patch
 
+from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from vllm import LLM, SamplingParams
 
-from trl import ModelConfig
-from vllm import SamplingParams, LLM
 from r1_vlm.environments.real_iad_env.real_iad_simple_env import RealIADSimpleEnv
+from trl import ModelConfig
 
 
 def post_process_generated_text(generated_text: str) -> str:
@@ -17,6 +18,9 @@ def post_process_generated_text(generated_text: str) -> str:
     else:
         return generated_text
 
+
+# this monkey patches the Qwen2.5-VL model to use the Liger Kernel on init. 
+apply_liger_kernel_to_qwen2_5_vl()
 
 # model_name = "/millcreek/home/sunil/r1_vlm/vlm-r1-real-iad-simple-env/checkpoint-80"
 model_name = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -32,6 +36,8 @@ model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     use_cache=False,
 )
 model.eval()
+
+
 
 
 processor = AutoProcessor.from_pretrained(
@@ -65,7 +71,7 @@ with world_size_patch, profiling_patch:
 # how many total tokens are we willing to think for
 MAX_THINKING_TOKENS = 1024
 # How many times we're willing to ignore the model trying to end thinking.
-NUM_IGNORE = 5
+NUM_IGNORE = 1
 
 sampling_params = SamplingParams(
     temperature=1.0,
