@@ -6,12 +6,11 @@ from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from tqdm import tqdm
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from vllm import LLM, SamplingParams
+from vllm.outputs import CompletionOutput, RequestOutput
 
 from r1_vlm.environments.real_iad_env.real_iad_simple_env import RealIADSimpleEnv
 from trl import ModelConfig
 
-# TODOs:
-# 1. Do the budget forcing batchwise. 
 
 def setup_model_and_processor() -> tuple[Qwen2_5_VLForConditionalGeneration, AutoProcessor]:
     '''
@@ -82,15 +81,20 @@ def setup_vllm(model: Qwen2_5_VLForConditionalGeneration):
     
     return vlm
 
-def generate_completions(vllm_inputs, vlm, max_thinking_tokens= 1024, num_ignore = 1, ignore_str="Wait "):
+def generate_completions(vllm_inputs: list[dict], vlm: LLM, max_thinking_tokens= 1024, num_ignore = 1, ignore_str="Wait "):
     '''
+    Generate completions with budget forcing.
+    
+    vllm_inputs: A list of dictionaries, each containing a "prompt" key, which will be used as the prompts for the model. Generally created through the prepare_data method of an environment.
+    vlm: The vlm model + vllm server to use for generation.
+    
     max_thinking_tokens: How many tokens we're willing to think for.
     num_ignore: How many times we're willing to ignore the model trying to end thinking.
     ignore_str: The string we manually add to promote the model to think more.
     '''
     
     # Need to output:
-    # 1. completion.outputs[0].text - the next that represents the completion
+    # 1. completion.outputs[0].text - the text that represents the completion
     # 2. completion.prompt_token_ids - the token ids of the prompt
     # 3. completion.outputs[0].token_ids - the token ids of the completion
     
@@ -146,7 +150,7 @@ def generate_completions(vllm_inputs, vlm, max_thinking_tokens= 1024, num_ignore
     for i in range(len(completion_texts)):
         vllm_inputs[i]["prompt"] += completion_texts[i]
         
-    
+        
     # how many times we've forced the model to think more.
     num_ignores = 0
     
@@ -157,6 +161,7 @@ def generate_completions(vllm_inputs, vlm, max_thinking_tokens= 1024, num_ignore
         # determine which elements of the batch need to be forced to think more.
         indices_to_force_thinking = [i for i in range(len(thinking_tokens_used)) if thinking_tokens_used[i] < max_thinking_tokens]
         
+        # TODO: Do the budget forcing batchwise. 
         for index in indices_to_force_thinking:
             # add the ignore string to the prompt.
             vllm_inputs[index]["prompt"] += ignore_str
@@ -177,7 +182,7 @@ def generate_completions(vllm_inputs, vlm, max_thinking_tokens= 1024, num_ignore
                 sampling_params=sampling_params,
             )
             
-            # extract data from the output. We don't need the prompt token ids as we already have them above.
+            # extract data from the output. 
             completion_token_ids = outputs[0].outputs[0].token_ids
             completion_text = outputs[0].outputs[0].text
             completion_length = len(completion_token_ids)
@@ -186,25 +191,62 @@ def generate_completions(vllm_inputs, vlm, max_thinking_tokens= 1024, num_ignore
             
             # update the element's prompt with the completion text.
             vllm_inputs[index]["prompt"] += completion_text
+
         
         num_ignores += 1
         print(f"Finished forcing thinking for {num_ignores} iterations.")
         print(f"Thinking tokens used: {thinking_tokens_used}")
     
-        
-        
-            
-            
-            
-            
     
+    # at this point, all of the elements of the batch are done thinking, so we'll signal this and force it to return an answer. 
+    for element in vllm_inputs:
+        element["prompt"] += "</think>\n<answer>"
     
+    sampling_params = SamplingParams(
+        # TODO: is 100 tokens enough? It is right now...
+        max_tokens=100,
+        min_tokens=1,
+        stop=[
+                "<|im_end|>",
+            ],
+        )
     
+    outputs = vlm.generate(
+        vllm_inputs,
+        sampling_params=sampling_params,
+    )
     
-    import ipdb; ipdb.set_trace()
-    
+    # collect the entire sequence of tokens for each element of the batch after generation. 
+    all_ids = []
+    for output in outputs:
+        prompt_ids = output.prompt_token_ids
+        completion_ids = output.outputs[0].token_ids
+        all_ids.append(list(prompt_ids) + list(completion_ids))
 
-    pass
+    # now we'll use prompt_token_ids, a list of the prompt token ids from the first generation step to truncate all_ids.
+    completion_ids = []
+    for i in range(len(prompt_token_ids)):
+        completion_ids.append(all_ids[i][len(prompt_token_ids[i]):])
+    
+    completion_texts = [processor.decode(completion_ids[i], skip_special_tokens=False, clean_up_tokenization_spaces=False) for i in range(len(completion_ids))]
+    
+    # repackage the data so it looks like it came right out of vllm. 
+    request_outputs = []
+    request_id = 0
+    for prompt_token_ids_element, completion_ids, completion_text in zip(prompt_token_ids, completion_ids, completion_texts):
+        request_outputs.append(RequestOutput(
+            request_id=request_id,
+            prompt_token_ids=prompt_token_ids_element,
+            # the cumulative logprob and logprobs are dummy values for required fields.
+            outputs=[CompletionOutput(index=0,text=completion_text, token_ids=completion_ids, cumulative_logprob = [], logprobs = [])],
+            # extra dummy values for required fields.
+            prompt="dummy placeholder", 
+            prompt_logprobs = [], 
+            finished=True,
+        ))
+        request_id += 1
+    
+    return request_outputs
 
 if __name__ == "__main__":
     model, processor = setup_model_and_processor()
@@ -221,4 +263,4 @@ if __name__ == "__main__":
             inputs=batch, processing_class=processor
         )
         
-        completions = generate_completions(vllm_inputs=vllm_inputs, vlm=vlm)
+        completions = generate_completions(vllm_inputs=vllm_inputs, vlm=vlm, num_ignore=5)
