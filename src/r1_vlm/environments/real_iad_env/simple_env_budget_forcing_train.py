@@ -15,7 +15,6 @@ os.environ["WANDB_PROJECT"] = "real-iad-simple-env-budget-forcing"
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
 gradient_checkpointing = True
 
-
 model_config = ModelConfig(
     model_name_or_path="Qwen/Qwen2.5-VL-3B-Instruct",
     torch_dtype="bfloat16",
@@ -43,26 +42,38 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = RealIADSimpleEnv(processing_class=processor, use_budget_forcing=True, image_size=(400, 400), max_thinking_tokens=1500, num_ignore=[1, 2, 3])
+vf_env = RealIADSimpleEnv(
+    processing_class=processor,
+    use_budget_forcing=True,
+    image_size=(400, 400),
+    max_thinking_tokens=1500,
+    num_ignore=[1, 2],
+    ignore_str=[
+        "Now, I will reflect on my previous thinking:",
+        "Wait, but",
+        "Hmm",
+        "I'm not certain that I'm right. Let me think through it again.",
+        "Alternatively,",
+    ],
+)
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
-
 
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
     # save path on the runpod instance
-    output_dir="vlm-r1-real-iad-simple-env-budget-forcing",
+    output_dir="vlm-r1-real-iad-simple-env-budget-forcing-longer-ignore-strings",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
     warmup_steps=0,
     logging_steps=1,
-    save_steps=100,
-    save_total_limit=1,
+    save_steps=25,
+    save_total_limit=10,
     num_train_epochs=10,
-    per_device_train_batch_size=12, 
-    num_generations=36,
+    per_device_train_batch_size=10,
+    num_generations=30,
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
@@ -93,5 +104,4 @@ trainer = QwenGRPOTrainer(
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/real_iad_env/simple_env_budget_forcing_train.py
-
+# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/real_iad_env/simple_env_budget_forcing_train.py

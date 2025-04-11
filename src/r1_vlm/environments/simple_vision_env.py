@@ -13,31 +13,47 @@ from r1_vlm.budget_forcing.budget_forcing import (
 
 
 class SimpleVisionEnv(SimpleEnv):
-    
-    def __init__(self, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int|list[int] = 1, ignore_str: str = "Wait", **kwargs: Any):
-        '''
+    def __init__(
+        self,
+        use_budget_forcing: bool = False,
+        max_thinking_tokens: int = 1024,
+        num_ignore: int | list[int] = 1,
+        ignore_str: str | list[str] = "Wait",
+        **kwargs: Any,
+    ):
+        """
         Initialize the SimpleVisionEnv.
-        
+
         use_budget_forcing: bool = False, Whether to use budget forcing. If true, we will budget force the model to think more with the following parameters:
-        
+
         max_thinking_tokens: int = 1024, The maximum number of tokens the model can think for.
-        
+
         num_ignore: int| list[int] = 1, The number of times we're willing to ignore the model trying to end thinking. If a list is provided, we will draw randomly from the list each time we generate.
-        
-        ignore_str: str = "Wait", The string we manually add when the model tries to end thinking to promote the model to think more.
-        '''
+
+        ignore_str: str| list[str] = "Wait", The string we manually add when the model tries to end thinking to promote the model to think more. If a list is provided, we will draw randomly from the list each time we need an ignore string during generation.
+        """
         super().__init__(**kwargs)
         self.use_budget_forcing = use_budget_forcing
         self.max_thinking_tokens = max_thinking_tokens
-        self.ignore_str = ignore_str
-        
+
+        if isinstance(ignore_str, str):
+            self.ignore_str = [ignore_str]
+        elif isinstance(ignore_str, list):
+            self.ignore_str = ignore_str
+        else:
+            raise ValueError(
+                f"ignore_str must be a str or a list of strs, got {type(ignore_str)}"
+            )
+
         if isinstance(num_ignore, int):
             self.num_ignore = [num_ignore]
         elif isinstance(num_ignore, list):
             self.num_ignore = num_ignore
         else:
-            raise ValueError(f"num_ignore must be an int or a list of ints, got {type(num_ignore)}")
-        
+            raise ValueError(
+                f"num_ignore must be an int or a list of ints, got {type(num_ignore)}"
+            )
+
     def generate(
         self,
         conversations,
@@ -49,8 +65,6 @@ class SimpleVisionEnv(SimpleEnv):
         custom_sp = sampling_params.clone()
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
-            
-
 
         states = [
             {
@@ -64,17 +78,16 @@ class SimpleVisionEnv(SimpleEnv):
 
         # generate completions either through budget forcing or just using vllm directly
         if self.use_budget_forcing:
-            
             # choose a number from self.num_ignore for this generation
             num_ignore = random.choice(self.num_ignore)
-            
+
             completions = generate_completions_with_budget_forcing(
                 vllm_inputs=vlm_inputs,
                 vlm=vlm,
                 processor=self.processing_class,
                 max_thinking_tokens=self.max_thinking_tokens,
                 num_ignore=num_ignore,
-                ignore_str=self.ignore_str
+                ignore_str=self.ignore_str,
             )
         else:
             completions = vlm.generate(
@@ -117,14 +130,12 @@ class SimpleVisionEnv(SimpleEnv):
                     cleaned_message["content"] = cleaned_content
                 cleaned.append(cleaned_message)
             return cleaned, images
-        
+
         cleaned_messages, images = clean_messages_for_logging(states[0]["messages"])
 
         self.logger.info(
             "Prompt 0:\n"
-            + json.dumps(
-                cleaned_messages, indent=4
-            )
+            + json.dumps(cleaned_messages, indent=4)
             + "\n\nCompletion 0:\n"
             + json.dumps(states[0]["messages"][-1], indent=4)
         )
@@ -137,9 +148,9 @@ class SimpleVisionEnv(SimpleEnv):
         completion_masks = [[1] * len(ids) for ids in completion_ids]
 
         return {
-            "ids": completion_ids, 
+            "ids": completion_ids,
             "messages": completion_messages,
-            "mask": completion_masks
+            "mask": completion_masks,
         }
 
     def prepare_data(self, *, inputs, processing_class):
