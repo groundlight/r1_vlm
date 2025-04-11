@@ -43,7 +43,7 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = RealIADSimpleEnv(processing_class=processor, use_budget_forcing=True, image_size=(400, 400), max_thinking_tokens=2048, num_ignore=[1, 2, 3, 4, 5])
+vf_env = RealIADSimpleEnv(processing_class=processor, use_budget_forcing=True, image_size=(400, 400), max_thinking_tokens=2048, num_ignore=[1, 2, 3])
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
 
@@ -61,8 +61,8 @@ training_args = GRPOConfig(
     save_steps=100,
     save_total_limit=1,
     num_train_epochs=10,
-    per_device_train_batch_size=12, 
-    num_generations=36,
+    per_device_train_batch_size=15, 
+    num_generations=45,
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
