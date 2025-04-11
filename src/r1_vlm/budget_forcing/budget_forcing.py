@@ -1,5 +1,3 @@
-
-
 from transformers import AutoProcessor
 from vllm import LLM, SamplingParams
 from vllm.outputs import CompletionOutput, RequestOutput
@@ -11,6 +9,7 @@ def generate_completions_with_budget_forcing(vllm_inputs: list[dict], vlm: LLM, 
     
     vllm_inputs: A list of dictionaries, each containing a "prompt" key, which will be used as the prompts for the model. Generally created through the prepare_data method of an environment.
     vlm: The vlm model + vllm server to use for generation.
+    processor: The processor to use for decoding token ids back to text.
     
     max_thinking_tokens: How many tokens we're willing to think for.
     num_ignore: How many times we're willing to ignore the model trying to end thinking.
@@ -86,36 +85,52 @@ def generate_completions_with_budget_forcing(vllm_inputs: list[dict], vlm: LLM, 
         indices_to_force_thinking = [i for i in range(len(thinking_tokens_used)) if thinking_tokens_used[i] < max_thinking_tokens]
         
         # TODO: Do the budget forcing batchwise. 
+        # add the ignore string to all prompts that need more thinking
         for index in indices_to_force_thinking:
-            # add the ignore string to the prompt.
             vllm_inputs[index]["prompt"] += ignore_str
+        
+        # find the maximum number of remaining tokens across all inputs
+        max_remaining_tokens = max([max_thinking_tokens - thinking_tokens_used[i] for i in indices_to_force_thinking])
+        
+        # keep only the inputs that need more thinking
+        batch_vllm_inputs = [vllm_inputs[i].copy() for i in indices_to_force_thinking]
+        
+        sampling_params = SamplingParams(
+            temperature=1.0,
+            min_tokens=1,
+            max_tokens=max_remaining_tokens,
+            skip_special_tokens=False,
+            stop=stop_strs,
+            include_stop_str_in_output=False
+        )
+        
+        # generate completions for all inputs in the batch at once
+        batch_outputs = vlm.generate(
+            batch_vllm_inputs,
+            sampling_params=sampling_params,
+        )
+        
+        # update each input with its completion, truncating if necessary
+        for batch_idx, original_idx in enumerate(indices_to_force_thinking):
+            # extract data from the output for this batch item
+            completion_token_ids = batch_outputs[batch_idx].outputs[0].token_ids
+            completion_text = batch_outputs[batch_idx].outputs[0].text
             
-            remaining_tokens = max_thinking_tokens - thinking_tokens_used[index]
-            vllm_input = [vllm_inputs[index].copy()]
-            sampling_params = SamplingParams(
-                temperature=1.0,
-                min_tokens=1,
-                max_tokens=remaining_tokens,
-                skip_special_tokens=False,
-                stop=stop_strs,
-                include_stop_str_in_output=False
-            )
+            # calculate the allowed remaining tokens for this input
+            remaining_tokens = max_thinking_tokens - thinking_tokens_used[original_idx]
             
-            outputs = vlm.generate(
-                vllm_input,
-                sampling_params=sampling_params,
-            )
+            # truncate token ids and text if they exceed the remaining tokens
+            if len(completion_token_ids) > remaining_tokens:
+                completion_token_ids = completion_token_ids[:remaining_tokens]
+                # decode the truncated tokens to get the truncated text
+                completion_text = processor.decode(completion_token_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False)
             
-            # extract data from the output. 
-            completion_token_ids = outputs[0].outputs[0].token_ids
-            completion_text = outputs[0].outputs[0].text
+            # update the number of tokens used
             completion_length = len(completion_token_ids)
+            thinking_tokens_used[original_idx] += completion_length
             
-            thinking_tokens_used[index] += completion_length
-            
-            # update the element's prompt with the completion text.
-            vllm_inputs[index]["prompt"] += completion_text
-
+            # update the element's prompt with the completion text
+            vllm_inputs[original_idx]["prompt"] += completion_text
         
         num_ignores += 1
         print(f"Finished forcing thinking for {num_ignores} iterations.")
