@@ -1,32 +1,46 @@
 import json
+import random
 from typing import Any, Dict, List, Sequence, Union
 
 from qwen_vl_utils import process_vision_info
+from transformers import AutoProcessor
+from verifiers import SimpleEnv
 from vllm import LLM, SamplingParams  # type: ignore
 
 from r1_vlm.budget_forcing.budget_forcing import (
     generate_completions_with_budget_forcing,
 )
-from verifiers import SimpleEnv
 
 
 class SimpleVisionEnv(SimpleEnv):
     
-    def __init__(self, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int = 1, ignore_str: str = "Wait", **kwargs: Any):
+    def __init__(self, processor: AutoProcessor|None = None, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int|list[int] = 1, ignore_str: str = "Wait", **kwargs: Any):
         '''
         Initialize the SimpleVisionEnv.
+
+        processor: AutoProcessor|None = None, The processor to use for the environment. Must be provided if use_budget_forcing is True.
         
         use_budget_forcing: bool = False, Whether to use budget forcing. If true, we will budget force the model to think more with the following parameters:
         
         max_thinking_tokens: int = 1024, The maximum number of tokens the model can think for.
         
-        num_ignore: int = 1, The number of times we're willing to ignore the model trying to end thinking.
+        num_ignore: int| list[int] = 1, The number of times we're willing to ignore the model trying to end thinking. If a list is provided, we will draw randomly from the list each time we generate.
         
         ignore_str: str = "Wait", The string we manually add when the model tries to end thinking to promote the model to think more.
         '''
         super().__init__(**kwargs)
         self.use_budget_forcing = use_budget_forcing
-    
+        self.processor = processor
+        self.max_thinking_tokens = max_thinking_tokens
+        self.ignore_str = ignore_str
+        
+        if isinstance(num_ignore, int):
+            self.num_ignore = [num_ignore]
+        elif isinstance(num_ignore, list):
+            self.num_ignore = num_ignore
+        else:
+            raise ValueError(f"num_ignore must be an int or a list of ints, got {type(num_ignore)}")
+        
     def generate(
         self,
         conversations,
@@ -53,11 +67,15 @@ class SimpleVisionEnv(SimpleEnv):
 
         # generate completions either through budget forcing or just using vllm directly
         if self.use_budget_forcing:
+            # choose a number from self.num_ignore for this generation
+            num_ignore = random.choice(self.num_ignore)
+            
             completions = generate_completions_with_budget_forcing(
                 vllm_inputs=vlm_inputs,
                 vlm=vlm,
+                processor=self.processor,
                 max_thinking_tokens=self.max_thinking_tokens,
-                num_ignore=self.num_ignore,
+                num_ignore=num_ignore,
                 ignore_str=self.ignore_str
             )
         else:

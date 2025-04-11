@@ -1,21 +1,17 @@
 import os
 
-from peft import LoraConfig, TaskType
+from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 from r1_vlm.environments.digit_recognition_env.digit_recognition_env import (
     DigitRecognitionEnv,
 )
-from trl import GRPOConfig, ModelConfig
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "digit-recognition-budget-forcing"
 
-
-vf_env = DigitRecognitionEnv(use_budget_forcing=True)
-dataset = vf_env.get_dataset()
-rubric = vf_env.get_rubric()
 
 
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
@@ -25,22 +21,12 @@ gradient_checkpointing = False
 model_config = ModelConfig(
     model_name_or_path="Qwen/Qwen2.5-VL-3B-Instruct",
     torch_dtype="bfloat16",
-    use_peft=True,
+    use_peft=False,
 )
 
-peft_config = LoraConfig(
-    task_type=TaskType.CAUSAL_LM,
-    inference_mode=False,
-    r=1280,
-    lora_alpha=5120,
-    lora_dropout=0.1,
-    target_modules=[
-        "q_proj",
-        "k_proj",
-        "v_proj",
-    ],
-)
 
+# this monkey patches the Qwen2.5-VL model to use the Liger Kernel on model init
+apply_liger_kernel_to_qwen2_5_vl()
 model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     pretrained_model_name_or_path=model_config.model_name_or_path,
     torch_dtype=model_config.torch_dtype,
@@ -59,6 +45,10 @@ else:
 processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
+
+vf_env = DigitRecognitionEnv(use_budget_forcing=True, processor=processor)
+dataset = vf_env.get_dataset()
+rubric = vf_env.get_rubric()
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
@@ -99,7 +89,8 @@ trainer = QwenGRPOTrainer(
     args=training_args,
     train_dataset=dataset,
     env=vf_env,
-    peft_config=peft_config,
 )
 
 trainer.train()
+
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/digit_recognition_env/train_budget_forcing.py
