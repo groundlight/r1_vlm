@@ -3,7 +3,6 @@ import random
 from typing import Any, Dict, List, Sequence, Union
 
 from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor
 from verifiers import SimpleEnv
 from vllm import LLM, SamplingParams  # type: ignore
 
@@ -14,11 +13,9 @@ from r1_vlm.budget_forcing.budget_forcing import (
 
 class SimpleVisionEnv(SimpleEnv):
     
-    def __init__(self, processor: AutoProcessor|None = None, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int|list[int] = 1, ignore_str: str = "Wait", **kwargs: Any):
+    def __init__(self, use_budget_forcing: bool = False, max_thinking_tokens: int = 1024, num_ignore: int|list[int] = 1, ignore_str: str = "Wait", **kwargs: Any):
         '''
         Initialize the SimpleVisionEnv.
-
-        processor: AutoProcessor|None = None, The processor to use for the environment. Must be provided if use_budget_forcing is True.
         
         use_budget_forcing: bool = False, Whether to use budget forcing. If true, we will budget force the model to think more with the following parameters:
         
@@ -30,7 +27,6 @@ class SimpleVisionEnv(SimpleEnv):
         '''
         super().__init__(**kwargs)
         self.use_budget_forcing = use_budget_forcing
-        self.processor = processor
         self.max_thinking_tokens = max_thinking_tokens
         self.ignore_str = ignore_str
         
@@ -67,13 +63,14 @@ class SimpleVisionEnv(SimpleEnv):
 
         # generate completions either through budget forcing or just using vllm directly
         if self.use_budget_forcing:
+            
             # choose a number from self.num_ignore for this generation
             num_ignore = random.choice(self.num_ignore)
             
             completions = generate_completions_with_budget_forcing(
                 vllm_inputs=vlm_inputs,
                 vlm=vlm,
-                processor=self.processor,
+                processor=self.processing_class,
                 max_thinking_tokens=self.max_thinking_tokens,
                 num_ignore=num_ignore,
                 ignore_str=self.ignore_str

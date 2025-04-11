@@ -5,17 +5,15 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
-from r1_vlm.environments.digit_recognition_env.digit_recognition_env import (
-    DigitRecognitionEnv,
+from r1_vlm.environments.real_iad_env.real_iad_simple_env import (
+    RealIADSimpleEnv,
 )
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
-os.environ["WANDB_PROJECT"] = "digit-recognition-budget-forcing"
-
-
+os.environ["WANDB_PROJECT"] = "real-iad-simple-env-budget-forcing"
 
 # Flag that determines if gradient checkpointing is used. If it is, we need to set use_cache to False.
-gradient_checkpointing = False
+gradient_checkpointing = True
 
 
 model_config = ModelConfig(
@@ -23,7 +21,6 @@ model_config = ModelConfig(
     torch_dtype="bfloat16",
     use_peft=False,
 )
-
 
 # this monkey patches the Qwen2.5-VL model to use the Liger Kernel on model init
 apply_liger_kernel_to_qwen2_5_vl()
@@ -46,29 +43,32 @@ processor = AutoProcessor.from_pretrained(
     model_config.model_name_or_path, padding_side="left"
 )
 
-vf_env = DigitRecognitionEnv(use_budget_forcing=True, processing_class=processor)
-dataset = vf_env.get_dataset()
+vf_env = RealIADSimpleEnv(processing_class=processor, use_budget_forcing=True, image_size=(400, 400), max_thinking_tokens=2048, num_ignore=[1, 2, 3, 4, 5])
+train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
+
+
 
 training_args = GRPOConfig(
     model_init_kwargs=model_config,
-    output_dir="vlm-r1-digit-recognition-budget-forcing",
+    # save path on the runpod instance
+    output_dir="vlm-r1-real-iad-simple-env-budget-forcing",
     learning_rate=1e-6,
     adam_beta2=0.98,
     lr_scheduler_type="cosine",
     warmup_steps=0,
     logging_steps=1,
-    save_steps=20,
+    save_steps=100,
     save_total_limit=1,
-    num_train_epochs=1,
-    per_device_train_batch_size=5,
-    num_generations=15,
+    num_train_epochs=10,
+    per_device_train_batch_size=4, 
+    num_generations=12,
     gradient_accumulation_steps=4,
     gradient_checkpointing=gradient_checkpointing,
     bf16=True,
     # GRPO specific parameters
     max_prompt_length=None,  # must be None for vllm + verifiers
-    max_completion_length=2048,
+    max_completion_length=4096,
     beta=0.001,
     temperature=1.0,
     sync_ref_model=True,
@@ -87,10 +87,11 @@ trainer = QwenGRPOTrainer(
     processing_class=processor,
     reward_funcs=rubric,
     args=training_args,
-    train_dataset=dataset,
+    train_dataset=train_dataset,
     env=vf_env,
 )
 
 trainer.train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/digit_recognition_env/train_budget_forcing.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/real_iad_env/simple_env_budget_forcing_train.py
+
