@@ -2,6 +2,7 @@ import json
 import random
 from typing import Any, Dict, List, Sequence, Union
 
+import imgcat
 from qwen_vl_utils import process_vision_info
 from verifiers import SimpleEnv
 from vllm import LLM, SamplingParams  # type: ignore
@@ -99,6 +100,7 @@ class SimpleVisionEnv(SimpleEnv):
 
         def clean_messages_for_logging(messages):
             cleaned = []
+            images = []
             for message in messages:
                 cleaned_message = message.copy()
                 if "content" in cleaned_message:
@@ -109,20 +111,25 @@ class SimpleVisionEnv(SimpleEnv):
                             "image" in cleaned_item
                             and cleaned_item["image"] is not None
                         ):
+                            images.append(cleaned_item["image"])
                             cleaned_item["image"] = "<PIL.Image object>"
                         cleaned_content.append(cleaned_item)
                     cleaned_message["content"] = cleaned_content
                 cleaned.append(cleaned_message)
-            return cleaned
+            return cleaned, images
+        
+        cleaned_messages, images = clean_messages_for_logging(states[0]["messages"])
 
         self.logger.info(
             "Prompt 0:\n"
             + json.dumps(
-                clean_messages_for_logging(states[0]["messages"][:-1]), indent=4
+                cleaned_messages, indent=4
             )
             + "\n\nCompletion 0:\n"
             + json.dumps(states[0]["messages"][-1], indent=4)
         )
+        for image in images:
+            imgcat.imgcat(image)
 
         completion_ids = [states[i]["completion_ids"] for i in range(len(states))]
         completion_messages = [states[i]["messages"][-1:] for i in range(len(states))]
