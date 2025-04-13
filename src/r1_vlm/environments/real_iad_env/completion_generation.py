@@ -1,15 +1,16 @@
 import random
+from copy import deepcopy
 from unittest.mock import patch
 
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from trl import ModelConfig
 from vllm import LLM
 
 from r1_vlm.budget_forcing.budget_forcing import (
     generate_completions_with_budget_forcing,
 )
 from r1_vlm.environments.real_iad_env.real_iad_simple_env import RealIADSimpleEnv
+from trl import ModelConfig
 
 
 def setup_model_and_processor(checkpoint_path: str) -> tuple[Qwen2_5_VLForConditionalGeneration, AutoProcessor]:
@@ -94,13 +95,31 @@ def setup_vllm(model: Qwen2_5_VLForConditionalGeneration):
 if __name__ == "__main__":
     model, processor = setup_model_and_processor(checkpoint_path="/millcreek/home/sunil/r1_vlm/vlm-r1-real-iad-simple-env-budget-forcing-longer-ignore-strings/checkpoint-100")
     env = setup_env(processor)
+
+    reward_funcs_list = env.get_rubric()
+    reward_funcs_dict = {
+        func.__name__: func 
+        for func in reward_funcs_list
+    }
+    
+    # drop the functions we don't want to use
+    reward_funcs_dict.pop("answer_format_reward_func")
+    reward_funcs_dict.pop("format_reward_func")
+    
+    assert len(reward_funcs_dict) == 2, "We should only have two reward functions"
+    
     train_dataset, _ = env.get_dataset()
     
     vlm = setup_vllm(model=model)
     
     for example in train_dataset:
+        batch_size = 2
+        
+        # create a batch of the same example, deep copy the example
+        example_batch = [deepcopy(example) for _ in range(batch_size)]
+        
         conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
-            inputs=[example], processing_class=processor
+            inputs=example_batch, processing_class=processor
         )
         
         num_ignore = random.choice(env.num_ignore)
@@ -114,6 +133,34 @@ if __name__ == "__main__":
                 temperature=1.0,
                 repetition_penalty=1.0,
             )
+        completion_messages = []
+        for completion in completions:
+            text = completion.outputs[0].text
+            messages = [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": text}],
+                }
+            ]
+            completion_messages.append(messages)
         
-        print(completions)
+        # maps the function name to a list of rewards, one for each example in the batch
+        reward_dict = {}
+        for reward_func_name, reward_func in reward_funcs_dict.items():
+            # Create lists of labels and bounding boxes that match the batch size
+            labels = [example["label"]] * batch_size
+            bounding_boxes = [example["bounding_box"]] * batch_size
+            
+            reward = reward_func(conversations, texts, completion_messages, label=labels, bounding_box=bounding_boxes)
+            reward_dict[reward_func_name] = reward
+            
+            
+        # sum the reward for each example in the batch
+        rewards = []
+        for index in range(batch_size):
+            reward = sum([reward_dict[function_name][index] for function_name in reward_funcs_dict.keys()])
+            rewards.append(reward)
+        
+        print(f"Rewards: {rewards}")
+        
     
