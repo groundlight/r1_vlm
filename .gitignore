@@ -183,3 +183,4 @@ counting-mnist/
 dataset/*
 .gradio/certificate.pem
 attention_visualization*
+src/r1_vlm/environments/real_iad_env/completion_results/completion_results.jsonl
