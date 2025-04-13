@@ -38,6 +38,8 @@ dependencies = [
     "runpod>=1.7.7",
     "pytest>=8.3.5",
     "liger-kernel>=0.5.6",
+    "notebook>=7.4.0",
+    "ipykernel>=6.29.5",
 ]
 
 [tool.hatch.metadata]
