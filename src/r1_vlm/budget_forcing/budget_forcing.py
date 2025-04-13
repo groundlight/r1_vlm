@@ -12,6 +12,8 @@ def generate_completions_with_budget_forcing(
     max_thinking_tokens=1024,
     num_ignore=1,
     ignore_str=["Wait"],
+    temperature=1.0,
+    repetition_penalty=1.0,
 ):
     """
     Generate completions with budget forcing.
@@ -23,6 +25,8 @@ def generate_completions_with_budget_forcing(
     max_thinking_tokens: How many tokens we're willing to think for.
     num_ignore: How many times we're willing to ignore the model trying to end thinking.
     ignore_str: The string or list of strings. We randomly draw from this list each time we need an ignore string during generation.
+    repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the generated text so far. Values > 1 encourage the model to use new tokens, while values < 1 encourage the model to repeat tokens.
+    temperature: The temperature to use for generation.
     """
 
     # Need to output:
@@ -45,7 +49,8 @@ def generate_completions_with_budget_forcing(
     ]
 
     sampling_params = SamplingParams(
-        temperature=1.0,
+        temperature=temperature,
+        repetition_penalty=repetition_penalty,
         min_tokens=0,
         max_tokens=max_thinking_tokens,
         skip_special_tokens=False,
@@ -104,10 +109,12 @@ def generate_completions_with_budget_forcing(
             if thinking_tokens_used[i] < max_thinking_tokens
         ]
 
-        # TODO: Do the budget forcing batchwise.
-        # add the ignore string to all prompts that need more thinking
+        # Choose one ignore string for this entire forcing step
+        chosen_ignore_str = random.choice(ignore_str)
+
+        # add the chosen ignore string to all prompts that need more thinking
         for index in indices_to_force_thinking:
-            vllm_inputs[index]["prompt"] += random.choice(ignore_str)
+            vllm_inputs[index]["prompt"] += chosen_ignore_str
 
         # find the maximum number of remaining tokens across all inputs
         max_remaining_tokens = max(
@@ -121,7 +128,8 @@ def generate_completions_with_budget_forcing(
         batch_vllm_inputs = [vllm_inputs[i].copy() for i in indices_to_force_thinking]
 
         sampling_params = SamplingParams(
-            temperature=1.0,
+            temperature=temperature,
+            repetition_penalty=repetition_penalty,
             min_tokens=1,
             max_tokens=max_remaining_tokens,
             skip_special_tokens=False,
@@ -173,6 +181,8 @@ def generate_completions_with_budget_forcing(
         # TODO: is 100 tokens enough? It is right now...
         max_tokens=100,
         min_tokens=1,
+        temperature=temperature,
+        repetition_penalty=repetition_penalty,
         stop=[
             "<|im_end|>",
         ],

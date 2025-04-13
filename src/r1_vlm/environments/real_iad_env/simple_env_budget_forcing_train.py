@@ -49,12 +49,28 @@ vf_env = RealIADSimpleEnv(
     max_thinking_tokens=1500,
     num_ignore=[1, 2],
     ignore_str=[
-        "Now, I will reflect on my previous thinking:",
-        "Wait, but",
-        "Hmm",
-        "I'm not certain that I'm right. Let me think through it again.",
-        "Alternatively,",
-    ],
+    # Focused on Self-Reflection/Re-evaluation:
+    "Wait, let me review my previous steps carefully.",
+    "Reflecting on my approach up to this point",
+    "Let me re-evaluate my reasoning.",
+    "I should double-check my work before proceeding.",
+    "Analyzing my previous output for potential improvements, ",
+    "Let me think step-by-step again.",
+    "Wait, I should verify my understanding before moving forward.",
+
+    # Focused on Considering Alternatives:
+    "Hmm, is there a different way to approach this?",
+    "Let's explore another possible solution.",
+    "Let me think about other options or methods.",
+    "What if I tried a different approach to this?",
+
+    # Expressing Uncertainty/Need for More Thought:
+    "Hold on, let me think this through more carefully.",
+    "I need to reconsider my last thought process.",
+    "Let me pause and ensure I haven't missed anything.",
+    "Something doesn't seem quite right, let me re-examine.",
+    "Before concluding, let me verify my logic."
+],
 )
 train_dataset, test_dataset = vf_env.get_dataset()
 rubric = vf_env.get_rubric()
@@ -69,8 +85,8 @@ training_args = GRPOConfig(
     lr_scheduler_type="cosine",
     warmup_steps=0,
     logging_steps=1,
-    save_steps=25,
-    save_total_limit=10,
+    save_steps=50,
+    save_total_limit=100,
     num_train_epochs=10,
     per_device_train_batch_size=10,
     num_generations=30,
