@@ -17,7 +17,7 @@ from r1_vlm.budget_forcing.budget_forcing import (
 )
 from r1_vlm.environments.real_iad_env.real_iad_simple_env import RealIADSimpleEnv
 
-print('hello')
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', type=int, default=0, help='GPU device index to use')
