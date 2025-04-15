@@ -95,10 +95,6 @@ def create_r1_aok_vqa_mc_dataset(max_examples_per_split=None):
     return DatasetDict(processed_datasets)
 
 
-def load_r1_aok_vqa_mc_dataset():
-    return load_dataset(AOK_VQA_MC_R1_PATH)
-
-
 if __name__ == "__main__":
     dataset = create_r1_aok_vqa_mc_dataset()
     dataset.save_to_disk(AOK_VQA_MC_R1_PATH)
