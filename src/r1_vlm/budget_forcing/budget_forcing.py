@@ -1,203 +1,245 @@
-from unittest.mock import patch
+import random
 
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-from trl import ModelConfig
-from vllm import SamplingParams, LLM
-from r1_vlm.environments.real_iad_env.real_iad_simple_env import RealIADSimpleEnv
+from transformers import AutoProcessor
+from vllm import LLM, SamplingParams
+from vllm.outputs import CompletionOutput, RequestOutput
 
 
-def post_process_generated_text(generated_text: str) -> str:
-    # check if it has a </think> token. If so, remove it and everything after it.
-    if "</think>" in generated_text:
-        return generated_text.split("</think>")[0]
-    # otherwise, check if it has an <answer> token. If so, remove it and everything after it.
-    elif "<answer>" in generated_text:
-        return generated_text.split("<answer>")[0]
-    else:
-        return generated_text
-
-
-# model_name = "/millcreek/home/sunil/r1_vlm/vlm-r1-real-iad-simple-env/checkpoint-80"
-model_name = "Qwen/Qwen2.5-VL-3B-Instruct"
-model_config = ModelConfig(
-    model_name_or_path=model_name,
-    torch_dtype="bfloat16",
-    use_peft=False,
-)
-
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-    pretrained_model_name_or_path=model_config.model_name_or_path,
-    torch_dtype=model_config.torch_dtype,
-    use_cache=False,
-)
-model.eval()
-
-
-processor = AutoProcessor.from_pretrained(
-    model_config.model_name_or_path, padding_side="left"
-)
-
-vf_env = RealIADSimpleEnv(processing_class=processor)
-
-_, test_dataset = vf_env.get_dataset()
-
-
-conversations, texts, processed_batch, vllm_inputs = vf_env.prepare_data(
-    inputs=[test_dataset[0]], processing_class=processor
-)
-
-
-world_size_patch = patch("torch.distributed.get_world_size", return_value=1)
-profiling_patch = patch(
-    "vllm.worker.worker.Worker._assert_memory_footprint_increased_during_profiling",
-    return_value=None,
-)
-with world_size_patch, profiling_patch:
-    vlm = LLM(
-        model=model.name_or_path,
-        device="cuda:0",
-        gpu_memory_utilization=1.0,
-        dtype="bfloat16",
-        enable_prefix_caching=True,
-        limit_mm_per_prompt={"image": 1, "video": 0},
-    )
-# how many total tokens are we willing to think for
-MAX_THINKING_TOKENS = 1024
-# How many times we're willing to ignore the model trying to end thinking.
-NUM_IGNORE = 5
-
-sampling_params = SamplingParams(
+def generate_completions_with_budget_forcing(
+    vllm_inputs: list[dict],
+    vlm: LLM,
+    processor: AutoProcessor,
+    max_thinking_tokens=1024,
+    num_ignore=1,
+    ignore_str=["Wait"],
     temperature=1.0,
-    min_tokens=0,
-    max_tokens=MAX_THINKING_TOKENS,
-    skip_special_tokens=False,
-    stop=[
+    repetition_penalty=1.0,
+):
+    """
+    Generate completions with budget forcing.
+
+    vllm_inputs: A list of dictionaries, each containing a "prompt" key, which will be used as the prompts for the model. Generally created through the prepare_data method of an environment.
+    vlm: The vlm model + vllm server to use for generation.
+    processor: The processor to use for decoding token ids back to text.
+
+    max_thinking_tokens: How many tokens we're willing to think for.
+    num_ignore: How many times we're willing to ignore the model trying to end thinking.
+    ignore_str: The string or list of strings. We randomly draw from this list each time we need an ignore string during generation.
+    repetition_penalty: Float that penalizes new tokens based on whether they appear in the prompt and the generated text so far. Values > 1 encourage the model to use new tokens, while values < 1 encourage the model to repeat tokens.
+    temperature: The temperature to use for generation.
+    """
+
+    # Need to output:
+    # 1. completion.outputs[0].text - the text that represents the completion
+    # 2. completion.prompt_token_ids - the token ids of the prompt
+    # 3. completion.outputs[0].token_ids - the token ids of the completion
+
+    # first, generate the model's initial response to the prompt. We will stop once either the model runs out of tokens
+    # or the model attempts to end thinking.
+
+    # track how many thinking tokens each element of the batch has used.
+    thinking_tokens_used = [0 for _ in range(len(vllm_inputs))]
+
+    stop_strs = [
         "</think>",
         "<answer>",
+        "<tool>",
         "<|im_start|>",
         "<|im_end|>",
-    ],
-    # don't include the stop string in the output as we want to prevent it from returning this token and instead guide it to think more.
-    include_stop_str_in_output=False,
-)
-completion_ids = vlm.generate(
-    vllm_inputs,
-    sampling_params=sampling_params,
-)
+    ]
 
-# Extract token IDs from the RequestOutput object
-token_ids = [output.outputs[0].token_ids for output in completion_ids]
-
-generated_texts = processor.batch_decode(
-    token_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False
-)
-
-for index in range(len(generated_texts)):
-    generated_texts[index] = post_process_generated_text(generated_texts[index])
-
-
-print("The model decided to stop thinking at this point:")
-print(generated_texts)
-
-# append the generated text to the conversation as part of the prompt
-vllm_inputs[0]["prompt"] += generated_texts[0]
-
-print("Added the generated text to the vllm_inputs:")
-print(vllm_inputs)
-
-# this is technically an overestimate as we truncate the generated text at the first </think> token, but it is close enough.
-tokens_used = len(completion_ids[0].outputs[0].token_ids)
-remaining_tokens = MAX_THINKING_TOKENS - tokens_used
-ignore_str = "Wait, let me reconsider my thinking"
-# how many times we've ignored the model trying to end thinking.
-num_ignores = 0
-
-while remaining_tokens > 0 and num_ignores < NUM_IGNORE:
-    vllm_inputs[0]["prompt"] += ignore_str
-
-    print("Added the ignore string to the vllm_inputs:")
-    print(vllm_inputs)
-    print(f"Remaining tokens: {remaining_tokens}")
     sampling_params = SamplingParams(
-        max_tokens=remaining_tokens,
-        min_tokens=100,
-        stop=[
-            "</think>",
-            "<answer>",
-            "<|im_start|>",
-            "<|im_end|>",
-        ],
+        temperature=temperature,
+        repetition_penalty=repetition_penalty,
+        min_tokens=0,
+        max_tokens=max_thinking_tokens,
         skip_special_tokens=False,
-        temperature=1.0,
+        # we interupt generation when the model attempts to end thinking, or start answering, or start using a tool.
+        stop=stop_strs,
+        # This should remove the stop string from the output. But I've found that it doesn't work when the stop string is multiple tokens.
+        include_stop_str_in_output=False,
     )
 
-    completion_ids = vlm.generate(
+    outputs = vlm.generate(
         vllm_inputs,
         sampling_params=sampling_params,
     )
 
-    token_ids = completion_ids[0].outputs[0].token_ids
-    print("The model has generated the following tokens:")
-    print(token_ids)
+    # collect the prompt token ids for each element of the batch.
+    # this is a list of lists of token ids. The length of the list is the same as vllm_inputs.
+    prompt_token_ids = [output.prompt_token_ids for output in outputs]
 
-    generated_texts = processor.batch_decode(
-        [token_ids], skip_special_tokens=False, clean_up_tokenization_spaces=False
+    # collect the completion text generated by the model for each element of the batch.
+    completion_texts = [output.outputs[0].text for output in outputs]
+
+    # collect the token ids of the completion for each element of the batch.
+    completion_token_ids = [output.outputs[0].token_ids for output in outputs]
+
+    # the number of tokens used for each completion.
+    completion_lengths = [
+        len(completion_token_ids[i]) for i in range(len(completion_token_ids))
+    ]
+
+    # update how many thinking tokens each element of the batch has used.
+    for i in range(len(completion_lengths)):
+        thinking_tokens_used[i] += completion_lengths[i]
+
+    # update the batch prompts with the completion text.
+    for i in range(len(completion_texts)):
+        vllm_inputs[i]["prompt"] += completion_texts[i]
+
+    # how many times we've forced the model to think more.
+    num_ignores = 0
+
+    # now we handle budget forcing. We continue generating as long as there is at least one element of the batch that has not used all of its thinking tokens
+    # and we have not ignored the model too many times.
+    while (
+        any(
+            [
+                thinking_tokens_used[i] < max_thinking_tokens
+                for i in range(len(thinking_tokens_used))
+            ]
+        )
+        and num_ignores < num_ignore
+    ):
+        # determine which elements of the batch need to be forced to think more.
+        indices_to_force_thinking = [
+            i
+            for i in range(len(thinking_tokens_used))
+            if thinking_tokens_used[i] < max_thinking_tokens
+        ]
+
+        # Choose one ignore string for this entire forcing step
+        chosen_ignore_str = random.choice(ignore_str)
+
+        # add the chosen ignore string to all prompts that need more thinking
+        for index in indices_to_force_thinking:
+            vllm_inputs[index]["prompt"] += chosen_ignore_str
+
+        # find the maximum number of remaining tokens across all inputs
+        max_remaining_tokens = max(
+            [
+                max_thinking_tokens - thinking_tokens_used[i]
+                for i in indices_to_force_thinking
+            ]
+        )
+
+        # keep only the inputs that need more thinking
+        batch_vllm_inputs = [vllm_inputs[i].copy() for i in indices_to_force_thinking]
+
+        sampling_params = SamplingParams(
+            temperature=temperature,
+            repetition_penalty=repetition_penalty,
+            min_tokens=1,
+            max_tokens=max_remaining_tokens,
+            skip_special_tokens=False,
+            stop=stop_strs,
+            include_stop_str_in_output=False,
+        )
+
+        # generate completions for all inputs in the batch at once
+        batch_outputs = vlm.generate(
+            batch_vllm_inputs,
+            sampling_params=sampling_params,
+        )
+
+        # update each input with its completion, truncating if necessary
+        for batch_idx, original_idx in enumerate(indices_to_force_thinking):
+            # extract data from the output for this batch item
+            completion_token_ids = batch_outputs[batch_idx].outputs[0].token_ids
+            completion_text = batch_outputs[batch_idx].outputs[0].text
+
+            # calculate the allowed remaining tokens for this input
+            remaining_tokens = max_thinking_tokens - thinking_tokens_used[original_idx]
+
+            # truncate token ids and text if they exceed the remaining tokens
+            if len(completion_token_ids) > remaining_tokens:
+                completion_token_ids = completion_token_ids[:remaining_tokens]
+                # decode the truncated tokens to get the truncated text
+                completion_text = processor.decode(
+                    completion_token_ids,
+                    skip_special_tokens=False,
+                    clean_up_tokenization_spaces=False,
+                )
+
+            # update the number of tokens used
+            completion_length = len(completion_token_ids)
+            thinking_tokens_used[original_idx] += completion_length
+
+            # update the element's prompt with the completion text
+            vllm_inputs[original_idx]["prompt"] += completion_text
+
+        num_ignores += 1
+        print(f"Finished forcing thinking for {num_ignores} iterations.")
+        print(f"Thinking tokens used: {thinking_tokens_used}")
+
+    # at this point, all of the elements of the batch are done thinking, so we'll signal this and force it to return an answer.
+    for element in vllm_inputs:
+        element["prompt"] += "</think>\n<answer>"
+
+    sampling_params = SamplingParams(
+        # TODO: is 100 tokens enough? It is right now...
+        max_tokens=100,
+        min_tokens=1,
+        temperature=temperature,
+        repetition_penalty=repetition_penalty,
+        stop=[
+            "<|im_end|>",
+        ],
     )
 
-    generated_texts[0] = post_process_generated_text(generated_texts[0])
-    print("The model has generated the following text:")
-    print(generated_texts[0])
+    outputs = vlm.generate(
+        vllm_inputs,
+        sampling_params=sampling_params,
+    )
 
-    # add the generated text to the conversation as part of the prompt
-    vllm_inputs[0]["prompt"] += generated_texts[0]
+    # collect the entire sequence of tokens for each element of the batch after generation.
+    all_ids = []
+    for output in outputs:
+        prompt_ids = output.prompt_token_ids
+        completion_ids = output.outputs[0].token_ids
+        all_ids.append(list(prompt_ids) + list(completion_ids))
 
-    print("Added the generated text to the vllm_inputs:")
-    print(vllm_inputs)
+    # now we'll use prompt_token_ids, a list of the prompt token ids from the first generation step to truncate all_ids.
+    completion_ids = []
+    for i in range(len(prompt_token_ids)):
+        completion_ids.append(all_ids[i][len(prompt_token_ids[i]) :])
 
-    # adjust the remaining tokens
-    tokens_used = len(token_ids)
-    remaining_tokens -= tokens_used
-    # increment the number of ignores
-    num_ignores += 1
-    print()
-    print()
+    completion_texts = [
+        processor.decode(
+            completion_ids[i],
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=False,
+        )
+        for i in range(len(completion_ids))
+    ]
 
-print("The model has finished thinking and generated the following text:")
-print(vllm_inputs[0]["prompt"])
+    # repackage the data so it looks like it came right out of vllm.
+    request_outputs = []
+    request_id = 0
+    for prompt_token_ids_element, completion_ids, completion_text in zip(
+        prompt_token_ids, completion_ids, completion_texts
+    ):
+        request_outputs.append(
+            RequestOutput(
+                request_id=request_id,
+                prompt_token_ids=prompt_token_ids_element,
+                # the cumulative logprob and logprobs are dummy values for required fields.
+                outputs=[
+                    CompletionOutput(
+                        index=0,
+                        text=completion_text,
+                        token_ids=completion_ids,
+                        cumulative_logprob=[],
+                        logprobs=[],
+                    )
+                ],
+                # extra dummy values for required fields.
+                prompt="dummy placeholder",
+                prompt_logprobs=[],
+                finished=True,
+            )
+        )
+        request_id += 1
 
-# now we append the end think and start answer tokens to the prompt
-vllm_inputs[0]["prompt"] += "</think>\n<answer>"
-
-sampling_params = SamplingParams(
-    max_tokens=100,
-    min_tokens=1,
-    stop=[
-        "<|im_end|>",
-    ],
-)
-
-completion_ids = vlm.generate(
-    vllm_inputs,
-    sampling_params=sampling_params,
-)
-
-token_ids = completion_ids[0].outputs[0].token_ids
-
-generated_texts = processor.batch_decode(
-    [token_ids], skip_special_tokens=False, clean_up_tokenization_spaces=False
-)
-
-generated_texts[0] = post_process_generated_text(generated_texts[0])
-
-print("The model has generated the following text:")
-print(generated_texts[0])
-
-vllm_inputs[0]["prompt"] += generated_texts[0]
-
-print("The model has finished answering and generated the following text:")
-print(vllm_inputs[0]["prompt"])
-
-import ipdb
-
-ipdb.set_trace()
+    return request_outputs

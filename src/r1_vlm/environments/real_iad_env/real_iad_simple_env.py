@@ -19,6 +19,7 @@ class RealIADSimpleEnv(SimpleVisionEnv):
         self,
         dataset: str = "Groundlight/real-iad-toy-brick-r1",
         system_prompt: str = "",
+        image_size: tuple[int, int] = (1024, 1024),
         **kwargs,
     ):
         super().__init__(system_prompt=system_prompt, **kwargs)
@@ -28,7 +29,7 @@ class RealIADSimpleEnv(SimpleVisionEnv):
 
         # we will resize the images to this resolution prior to training
         # 1024x1024 is the native resolution of the images
-        self.image_size = (1024, 1024)
+        self.image_size = image_size
 
     def get_dataset(self) -> tuple[Dataset, Dataset]:
         """
