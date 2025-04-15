@@ -25,12 +25,12 @@ def generate_r1_messages(example):
         choices[correct_choice_idx] if correct_choice_idx is not None else None
     )
 
-    system_prompt = "You are a helpful assistant. You first think and reason about the question, then provide the user with the answer. Show your work in <think> </think> tags and return the answer in <answer> </answer> tags."
+    system_prompt = "You are a helpful assistant. You first think and reason about the question, then provide the user with the answer from the list of possible answers. Show your work in <think> </think> tags and return the answer in <answer> </answer> tags."
 
     choices_str = "Possible answers: "
     for i, choice in enumerate(choices):
         if i == len(choices) - 1:
-            choices_str += f"{choice}"
+            choices_str += f"or {choice}."
         else:
             choices_str += f"{choice}, "
 
@@ -97,4 +97,4 @@ def create_r1_aok_vqa_mc_dataset(max_examples_per_split=None):
 
 if __name__ == "__main__":
     dataset = create_r1_aok_vqa_mc_dataset()
-    dataset.save_to_disk(AOK_VQA_MC_R1_PATH)
+    dataset.save_to_disk(AOK_VQA_MC_R1_PATH, storage_options={"format": "arrow"})

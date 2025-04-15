@@ -1,11 +1,13 @@
 from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import AOK_VQA_MC_R1_PATH
 from verifiers.parsers import XMLParser
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from trl.trainer.grpo_trainer import RewardFunc
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 import re
+
+from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import create_r1_aok_vqa_mc_dataset
 
 
 class AOKVQASimpleEnv(SimpleVisionEnv):
@@ -19,10 +21,10 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         self.parser = XMLParser(fields=["think", "answer"])
 
     def get_dataset(self) -> tuple[Dataset, Dataset, Dataset]:
-        dataset = load_dataset(self.dataset_name)
+        dataset = create_r1_aok_vqa_mc_dataset()
 
         train_dataset = dataset["train"]
-        val_dataset = dataset["val"]
+        val_dataset = dataset["validation"]
         test_dataset = dataset["test"]
 
         train_dataset = preprocess_r1_dataset(train_dataset)
@@ -119,12 +121,24 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
                 else:
                     answers.append(None)
 
+            # strip whitespace from answers
+            for answer in answers:
+                if isinstance(answer, str):
+                    answer = answer.strip()
+
             correct_answers = kwargs["multiple_choice_answer"]
 
-            print(f"correct_answers: {correct_answers}")
-            print(f"answers: {answers}")
+            if len(correct_answers) != len(answers):
+                raise ValueError(
+                    f"The number of correct answers ({len(correct_answers)}) does not match the number of answers ({len(answers)})"
+                )
 
-            rewards = [0.0 for _ in range(len(completions))]
+            rewards = []
+            for answer, correct_answer in zip(answers, correct_answers):
+                if answer == correct_answer:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
 
             return rewards
 
