@@ -120,8 +120,8 @@ def train():
         # GRPO specific parameters
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=1024,
-        # no KL regularization for PEFT, otherwise small beta.
-        beta=0.0 if peft_config is not None else 0.001,
+        # smaller KL regularization for PEFT than full finetuning
+        beta=1e-5 if peft_config is not None else 0.001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,

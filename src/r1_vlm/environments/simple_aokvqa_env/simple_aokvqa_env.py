@@ -8,6 +8,7 @@ from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 import re
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import create_r1_aok_vqa_mc_dataset
+import json
 
 
 class AOKVQASimpleEnv(SimpleVisionEnv):
@@ -142,4 +143,94 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
 
             return rewards
 
-        return [format_reward_func, correctness_reward_func]
+        def record_data_func(prompts, completions, completions_messages, **kwargs):
+            """
+            Records data to disk for analysis, returns 0.0 reward for all examples.
+            """
+
+            # schema:
+            # the prompts
+            # the completions
+            # if the model's answer was correct
+
+            preprocessed_data = AOKVQASimpleEnv.preprocess_for_reward(
+                prompts=prompts,
+                completions=completions,
+                completions_messages=completions_messages,
+            )
+
+            texts = preprocessed_data["texts"]
+
+            thinking_texts = []
+            answer_texts = []
+            for text in texts:
+                parsed = self.parser.parse(text)
+                if hasattr(parsed, "think"):
+                    thinking_texts.append(parsed.think)
+                else:
+                    thinking_texts.append(None)
+                if hasattr(parsed, "answer"):
+                    answer_texts.append(parsed.answer)
+                else:
+                    answer_texts.append(None)
+
+            correctness_rewards = correctness_reward_func(
+                prompts=prompts,
+                completions=completions,
+                completions_messages=completions_messages,
+                **kwargs,
+            )
+
+            question_ids = kwargs["question_id"]
+            questions = kwargs["question"]
+            choices = kwargs["choices"]
+            difficult_direct_answer = kwargs["difficult_direct_answer"]
+            correct_choice_idx = kwargs["correct_choice_idx"]
+            direct_answers = kwargs["direct_answers"]
+            rationales = kwargs["rationales"]
+
+            # now we can assemble an example for each completion and write it to disk
+            for (
+                question_id,
+                question,
+                choices,
+                difficult_direct_answer,
+                correct_choice_idx,
+                direct_answers,
+                rationales,
+                completion,
+                correctness_reward,
+            ) in zip(
+                question_ids,
+                questions,
+                choices,
+                difficult_direct_answer,
+                correct_choice_idx,
+                direct_answers,
+                rationales,
+                texts,
+                correctness_rewards,
+            ):
+                example = {
+                    "question_id": question_id,
+                    "question": question,
+                    "choices": choices,
+                    "difficult_direct_answer": difficult_direct_answer,
+                    "correct_choice_idx": correct_choice_idx,
+                    "direct_answers": direct_answers,
+                    "rationales": rationales,
+                    "completion": completion,
+                    "correctness_reward": correctness_reward,
+                }
+
+                # save the example to disk
+                with open(
+                    "/millcreek/home/sunil/r1_vlm_bumbershoot0/r1_vlm/src/r1_vlm/environments/simple_aokvqa_env/aokvqa_examples.jsonl",
+                    "a",
+                ) as f:
+                    f.write(json.dumps(example) + "\n")
+
+            # No reward for this function
+            return [0.0 for _ in range(len(completions))]
+
+        return [format_reward_func, correctness_reward_func, record_data_func]
