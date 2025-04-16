@@ -1,13 +1,13 @@
 import os
-from trl import ModelConfig
-from trl import GRPOConfig
 
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-from r1_vlm.environments.simple_aokvqa_env.simple_aokvqa_env import AOKVQASimpleEnv
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
+import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
-import torch
+from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
+
+from r1_vlm.environments.simple_aokvqa_env.simple_aokvqa_env import AOKVQASimpleEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "simple-aokvqa-env"
@@ -89,7 +89,7 @@ def find_target_linear_names(
 
 def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=True)
+        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
     vf_env = AOKVQASimpleEnv(processing_class=processor)
@@ -111,8 +111,8 @@ def train():
         save_steps=100,
         save_total_limit=10,
         num_train_epochs=10,
-        per_device_train_batch_size=3,
-        num_generations=12,
+        per_device_train_batch_size=5,
+        num_generations=15,
         # turned this down to 2 so we get more frequent updates to test this out.
         gradient_accumulation_steps=2,
         gradient_checkpointing=gradient_checkpointing,
@@ -130,8 +130,7 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        # running on bumbershoot0 with 5 3090s
-        vllm_device="cuda:4",
+        vllm_device="cuda:3",
     )
 
     trainer = QwenGRPOTrainer(
@@ -150,4 +149,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3,4 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_4only.yaml src/r1_vlm/environments/simple_aokvqa_env/simple_aokvqa_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/simple_aokvqa_env/simple_aokvqa_train.py
