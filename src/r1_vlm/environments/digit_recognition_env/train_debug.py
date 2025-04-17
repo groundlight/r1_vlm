@@ -91,7 +91,7 @@ def find_target_linear_names(
 
 def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=True)
+        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
     vf_env = DigitRecognitionEnv(processing_class=processor)
@@ -114,7 +114,7 @@ def train():
         save_total_limit=10,
         num_train_epochs=10,
         per_device_train_batch_size=5,
-        num_generations=20,
+        num_generations=15,
         # turned this down to 2 so we get more frequent updates to test this out.
         gradient_accumulation_steps=2,
         gradient_checkpointing=gradient_checkpointing,
@@ -153,4 +153,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3,4 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_4only.yaml src/r1_vlm/environments/digit_recognition_env/train_lora.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/digit_recognition_env/train_debug.py
