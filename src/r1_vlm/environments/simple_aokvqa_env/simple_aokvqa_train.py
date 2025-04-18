@@ -4,10 +4,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from trl import GRPOConfig, ModelConfig
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 from r1_vlm.environments.simple_aokvqa_env.simple_aokvqa_env import AOKVQASimpleEnv
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "simple-aokvqa-env"
@@ -101,7 +101,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-simple-aokvqa-env",
+        output_dir="vlm-r1-simple-aokvqa-env-cliphigh-dapo",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
@@ -131,6 +131,9 @@ def train():
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
         vllm_device="cuda:3",
+        # clipHigh strategy from DAPO paper
+        epsilon_low=0.2,
+        epsilon_high=0.28,
     )
 
     trainer = QwenGRPOTrainer(
