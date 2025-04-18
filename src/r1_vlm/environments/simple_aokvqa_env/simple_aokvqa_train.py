@@ -101,7 +101,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-simple-aokvqa-env-cliphigh-dapo",
+        output_dir="vlm-r1-simple-aokvqa-env-cliphigh-ssr-no-format-reward",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
@@ -114,7 +114,7 @@ def train():
         per_device_train_batch_size=5,
         num_generations=15,
         # turned this down to 2 so we get more frequent updates to test this out.
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
         # GRPO specific parameters

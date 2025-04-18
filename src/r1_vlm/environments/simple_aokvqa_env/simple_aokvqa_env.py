@@ -1,14 +1,17 @@
-from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
-from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import AOK_VQA_MC_R1_PATH
-from verifiers.parsers import XMLParser
-from datasets import Dataset
-from r1_vlm.datasets.utils import preprocess_r1_dataset
-from trl.trainer.grpo_trainer import RewardFunc
-from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+import json
 import re
 
-from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import create_r1_aok_vqa_mc_dataset
-import json
+from datasets import Dataset
+
+from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import (
+    AOK_VQA_MC_R1_PATH,
+    create_r1_aok_vqa_mc_dataset,
+)
+from r1_vlm.datasets.utils import preprocess_r1_dataset
+from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 
 class AOKVQASimpleEnv(SimpleVisionEnv):
@@ -233,4 +236,4 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
             # No reward for this function
             return [0.0 for _ in range(len(completions))]
 
-        return [format_reward_func, correctness_reward_func, record_data_func]
+        return [correctness_reward_func]
