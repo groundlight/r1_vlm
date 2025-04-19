@@ -1,5 +1,4 @@
 import json
-import re
 
 from datasets import Dataset
 
@@ -23,6 +22,10 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         super().__init__(**kwargs)
         self.dataset_name = dataset
         self.parser = XMLParser(fields=["think", "answer"])
+        self._fields = [("think", ["think"]), ("answer", ["answer"])]
+
+    def parse(self, text: str, strip: bool = True):
+        return self.parser.parse(text, strip=strip)
 
     def get_dataset(self) -> tuple[Dataset, Dataset, Dataset]:
         dataset = create_r1_aok_vqa_mc_dataset()
@@ -36,28 +39,6 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         test_dataset = preprocess_r1_dataset(test_dataset)
 
         return train_dataset, val_dataset, test_dataset
-
-    def check_format(text: str) -> float:
-        """
-        Checks if the format is correct for a single message.
-        """
-        # Find and start from the first <think> tag (removes the bootstrap prompt, if it exists)
-        think_start = text.find("<think>")
-        if think_start != -1:
-            text = text[think_start:]
-
-        try:
-            # Check if the format is correct
-            answer_regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
-
-            answer_match = re.search(answer_regex, text, re.DOTALL)
-
-            if answer_match is not None and len(answer_match.groups()) == 2:
-                return 1.0
-            return 0.0
-        except Exception as e:
-            print(f"Error in check_format: {e}")
-            return 0.0
 
     @staticmethod
     def preprocess_for_reward(*, prompts, completions, completions_messages):
@@ -86,21 +67,70 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
 
     def get_rubric(self) -> list[RewardFunc]:
         def format_reward_func(prompts, completions, completions_messages, **kwargs):
-            """
-            Provides a reward if the model's output is formatted correctly - a <think> </think> section and a <answer> </answer> section.
-            """
+            """Soft reward function that checks if each step follows the expected format."""
+            def check_format(trajectory):
+                model_messages = [msg for msg in trajectory if msg["role"] == "assistant"]
+                if not model_messages:
+                    return 0.0
+                format_scores = []
+                for msg in model_messages:
+                    content = msg["content"]
+                    if isinstance(content, list):
+                        text_content = " ".join(part.get("text", "") for part in content)
+                    else:
+                        text_content = content
+                    parsed = self.parse(text_content)
+                    parsed_no_strip = self.parse(text_content, strip=False)
 
+                    has_any_field = False
+                    total_fields = 0
+                    expected_field_count = len(self._fields)
+                    present_field_sets = set()
+                    has_correct_spacing = True
+
+                    for i, (canonical, alternatives) in enumerate(self._fields):
+                        field_set_present = False
+                        for alt in alternatives:
+                            if hasattr(parsed, alt) and getattr(parsed, alt) is not None:
+                                has_any_field = True
+                                total_fields += 1
+                                field_set_present = True
+                                if not (hasattr(parsed_no_strip, alt) and getattr(parsed_no_strip, alt) is not None):
+                                    has_correct_spacing = False
+                            elif text_content.count(f"<{alt}>") > 0 or text_content.count(f"</{alt}>") > 0:
+                                total_fields += 1
+                                field_set_present = True
+                        if field_set_present:
+                            present_field_sets.add(i)
+
+                    format_score = 0.0
+                    starts_with_any_field = any(text_content.strip().startswith(f"<{alt}>") for alt in self._fields[0][1])
+                    ends_with_any_field = any(text_content.strip().endswith(f"</{alt}>") for alt in self._fields[-1][1])
+
+                    if has_any_field:
+                        field_set_ratio = len(present_field_sets) / expected_field_count
+                        format_score += 0.4 * field_set_ratio
+                    if has_correct_spacing:
+                        format_score += 0.2
+                    if starts_with_any_field:
+                        format_score += 0.2
+                    if ends_with_any_field:
+                        format_score += 0.2
+
+                    format_scores.append(format_score)
+                if not format_scores:
+                    return 0.0
+                return sum(format_scores) / len(format_scores)
+            
             preprocessed_data = AOKVQASimpleEnv.preprocess_for_reward(
                 prompts=prompts,
                 completions=completions,
                 completions_messages=completions_messages,
             )
 
-            texts = preprocessed_data["texts"]
-
-            rewards = [AOKVQASimpleEnv.check_format(text) for text in texts]
-
-            return rewards
+            merged_completions_messages = preprocessed_data["merged_completions_messages"]
+            
+            return [check_format(m) for m in merged_completions_messages]
 
         def correctness_reward_func(
             prompts, completions, completions_messages, **kwargs
@@ -236,4 +266,4 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
             # No reward for this function
             return [0.0 for _ in range(len(completions))]
 
-        return [correctness_reward_func]
+        return [format_reward_func, correctness_reward_func]
