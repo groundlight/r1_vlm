@@ -118,6 +118,15 @@ def evaluate(model_name_or_path:str):
         
         if model_answer == gt_answer:
             correct += 1
+        else:
+            print("--------------------------------")
+            print("Incorrect answer:")
+            print(f"Question: {example['question']}")
+            print(f"Model answer: {model_answer}")
+            print(f"GT answer: {gt_answer}")
+            print(f"Options: {options_set}")
+            print(f"Generation: {generations_dict[question_id]['generation']}")
+            print("--------------------------------")
         if model_answer in options_set:
             in_option_set += 1
             
@@ -133,4 +142,4 @@ def evaluate(model_name_or_path:str):
 
 
 if __name__ == "__main__":
-    evaluate(model_name_or_path="/millcreek/home/sunil/r1_vlm/vlm-r1-simple-aokvqa-env/checkpoint-1800")
+    evaluate(model_name_or_path="/millcreek/home/sunil/r1_vlm/vlm-r1-simple-aokvqa-env-cliphigh-ssr-soft-format-reward/checkpoint-2600")
