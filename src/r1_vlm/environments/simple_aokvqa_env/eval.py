@@ -137,12 +137,6 @@ def evaluate(model_name_or_path:str):
         
     print(f"Accuracy: {correct / total}")
     print(f"In option set: {in_option_set / total}")
-        
-    
-    
-    
-
-
 
 if __name__ == "__main__":
     evaluate(model_name_or_path="/millcreek/home/sunil/r1_vlm/vlm-r1-simple-aokvqa-env-cliphigh-ssr-soft-format-reward/checkpoint-2600")
