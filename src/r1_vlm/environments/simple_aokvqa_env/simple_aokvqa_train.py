@@ -101,7 +101,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-simple-aokvqa-env-cliphigh-ssr-soft-format-reward",
+        output_dir="vlm-r1-simple-aokvqa-env-promote-prompt-diversity-train-on-difficult-examples",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
@@ -119,7 +119,7 @@ def train():
         bf16=True,
         # GRPO specific parameters
         max_prompt_length=None,  # must be None for vllm + verifiers
-        max_completion_length=1024,
+        max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
         beta=1e-5 if peft_config is not None else 0.001,
         temperature=1.0,
