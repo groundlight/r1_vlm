@@ -365,6 +365,12 @@ wheels = [
 ]
 
 [[package]]
+name = "imgcat"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/fa/c09733cb5f8a793d2429d06c510a9eaa605fc14381de6701c2df6be69502/imgcat-0.6.0.tar.gz", hash = "sha256:b3547b68adb3f1f9b611390e804c94ebd464a215858543cbf97df86fbcd7935c", size = 12681 }
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1226,6 +1232,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "clip" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "imgcat" },
     { name = "mobileclip" },
     { name = "ultralytics" },
 ]
@@ -1234,6 +1241,7 @@ dependencies = [
 requires-dist = [
     { name = "clip", git = "https://github.com/ultralytics/CLIP.git" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
+    { name = "imgcat", specifier = ">=0.6.0" },
     { name = "mobileclip", git = "https://github.com/THU-MIG/yoloe.git?subdirectory=third_party%2Fml-mobileclip" },
     { name = "ultralytics", specifier = ">=8.3.112" },
 ]

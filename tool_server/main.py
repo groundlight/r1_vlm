@@ -4,16 +4,20 @@ import io
 from contextlib import asynccontextmanager
 from typing import List
 
+import torch
 from fastapi import FastAPI, File, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 
 
 # Model configs and types
+class Detection(BaseModel):
+    bbox_2d: List[int]  # [x1, y1, x2, y2]
+    label: str
+    confidence: float
+
 class DetectionResult(BaseModel):
-    boxes: List[List[float]]  # [x1, y1, x2, y2]
-    scores: List[float]
-    labels: List[str]
+    detections: List[Detection]
     
 class DetectionResponse(BaseModel):
     results: DetectionResult
@@ -28,6 +32,9 @@ async def lifespan(app: FastAPI):
     global model
     from ultralytics import YOLOE
     model = YOLOE("yoloe-11l-seg.pt")  # Using large model for best performance
+    
+    if torch.cuda.is_available():
+        model.to("cuda:0")
     yield
     # Cleanup on shutdown
     model = None
@@ -42,7 +49,7 @@ request_semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 @app.post("/detect", response_model=DetectionResponse)
 async def detect(
     classes: List[str],
-    confidence: float = 0.0,
+    confidence: float,
     image: UploadFile = File(...),
 ) -> DetectionResponse:
     # Use semaphore to control concurrent access
@@ -60,32 +67,35 @@ async def detect(
             if len(classes) == 0:
                 raise ValueError("Error: classes must be a non-empty list")
         
-        print("Setting classes")
+        print(f"Setting classes: {classes}")
         # Set detection classes
         model.set_classes(classes, model.get_text_pe(classes))
         
-        print("Predicting")
+        print(f"Predicting with confidence {confidence}")
         results = model.predict(img, conf=confidence)
         
-        print(results)
+        # Extract actual detection results
+        result = results[0]
+        boxes = [[int(round(x)) for x in box] for box in result.boxes.xyxy.tolist()]
+        scores = result.boxes.conf.tolist()
+        labels = [result.names[int(cls)] for cls in result.boxes.cls.tolist()]
         
-        #results[0].show()
-            
-        # TODO: Actual model inference will go here
-        # For now returning dummy data
-        dummy_result = DetectionResult(
-            boxes=[[0, 0, 100, 100]],
-            scores=[0.95],
-            labels=["dummy"]
-        )
+        # Format detections as requested
+        detections = [
+            {"bbox_2d": box, "label": label, "confidence": score}
+            for box, label, score in zip(boxes, labels, scores)
+        ]
         
-        # Convert annotated image to base64
+        # Create annotated image
+        annotated_img = result.plot(conf=False, labels=True)
         buffered = io.BytesIO()
-        img.save(buffered, format="JPEG")
+        Image.fromarray(annotated_img).save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
         
         return DetectionResponse(
-            results=dummy_result,
+            results=DetectionResult(
+                detections=detections
+            ),
             annotated_image=img_str
         )
 
