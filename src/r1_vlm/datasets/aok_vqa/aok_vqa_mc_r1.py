@@ -1,7 +1,7 @@
-from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
-from datasets import load_dataset, Dataset, DatasetDict
+from datasets import Dataset, DatasetDict, load_dataset
 from tqdm import tqdm
 
+from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 
 AOK_VQA_MC_R1_PATH = "/millcreek/data/aokvqa/aokvqa_hf/aokvqa_mc_r1"
 
@@ -25,7 +25,7 @@ def generate_r1_messages(example):
         choices[correct_choice_idx] if correct_choice_idx is not None else None
     )
 
-    system_prompt = "You are a helpful assistant. You first think and reason about the question, then provide the user with the answer from the list of possible answers. Show your work in <think> </think> tags and return the answer in <answer> </answer> tags."
+    system_prompt = "You are a helpful assistant. You first think and reason about the question, then provide the user with the answer from the list of possible answers. Show your work in <think> </think> tags and return the answer in <answer> </answer> tags. Please consider each option carefully and completely while reasoning before selecting the correct answer. You may change your mind while reasoning, and circle back to previous options if they are more correct."
 
     choices_str = "Possible answers: "
     for i, choice in enumerate(choices):
@@ -60,7 +60,7 @@ def generate_r1_messages(example):
         {
             "role": "assistant",
             "content": [
-                {"type": "text", "text": "\n<think> Let me solve this step by step."}
+                {"type": "text", "text": "\n<think>"}
             ],
         },
     ]

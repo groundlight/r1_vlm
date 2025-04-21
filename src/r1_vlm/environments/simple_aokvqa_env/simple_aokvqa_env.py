@@ -1,6 +1,6 @@
 import json
 
-from datasets import Dataset
+from datasets import Dataset, concatenate_datasets
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_r1 import (
     AOK_VQA_MC_R1_PATH,
@@ -33,11 +33,26 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         train_dataset = dataset["train"]
         val_dataset = dataset["validation"]
         test_dataset = dataset["test"]
+        
+        
+        
 
         train_dataset = preprocess_r1_dataset(train_dataset)
         val_dataset = preprocess_r1_dataset(val_dataset)
         test_dataset = preprocess_r1_dataset(test_dataset)
-
+        
+        # sort so the difficult examples are at the top of the stack. We want to use these!
+        train_dataset = train_dataset.sort("difficult_direct_answer", reverse=True)
+        
+        # start with some easy examples first, then move to train on the difficult examples
+        num_easy = 100
+        easiest = train_dataset[-num_easy:]
+        train_dataset = train_dataset[:-num_easy]
+        train_dataset = concatenate_datasets([easiest, train_dataset])
+        
+        for example in train_dataset:
+            print(example["difficult_direct_answer"])
+            
         return train_dataset, val_dataset, test_dataset
 
     @staticmethod
@@ -267,3 +282,8 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
             return [0.0 for _ in range(len(completions))]
 
         return [format_reward_func, correctness_reward_func]
+
+if __name__ == "__main__":
+    env = AOKVQASimpleEnv()
+    train_dataset, val_dataset, test_dataset = env.get_dataset()
+    print(train_dataset)
