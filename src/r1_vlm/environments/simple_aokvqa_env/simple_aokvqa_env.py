@@ -34,12 +34,11 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         val_dataset = dataset["validation"]
         test_dataset = dataset["test"]
         
-        
-        
-
         train_dataset = preprocess_r1_dataset(train_dataset)
         val_dataset = preprocess_r1_dataset(val_dataset)
         test_dataset = preprocess_r1_dataset(test_dataset)
+        
+        original_len = len(train_dataset)
         
         # sort so the difficult examples are at the top of the stack. We want to use these!
         train_dataset = train_dataset.sort("difficult_direct_answer", reverse=True)
@@ -49,6 +48,8 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         easiest = train_dataset[-num_easy:]
         train_dataset = train_dataset[:-num_easy]
         train_dataset = concatenate_datasets([easiest, train_dataset])
+        
+        assert len(train_dataset) == original_len
         
         for example in train_dataset:
             print(example["difficult_direct_answer"])
