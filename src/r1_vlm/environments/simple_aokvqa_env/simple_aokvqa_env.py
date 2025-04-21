@@ -45,9 +45,10 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         
         # start with some easy examples first, then move to train on the difficult examples
         num_easy = 100
-        easiest = train_dataset[-num_easy:]
-        train_dataset = train_dataset[:-num_easy]
-        train_dataset = concatenate_datasets([easiest, train_dataset])
+        total_len = len(train_dataset)
+        easiest = train_dataset.select(range(total_len - num_easy, total_len))
+        rest = train_dataset.select(range(total_len - num_easy))
+        train_dataset = concatenate_datasets([easiest, rest])
         
         assert len(train_dataset) == original_len
             

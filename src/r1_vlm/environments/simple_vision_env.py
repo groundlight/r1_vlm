@@ -94,8 +94,7 @@ class SimpleVisionEnv(SimpleEnv):
                 vlm_inputs, sampling_params=custom_sp, use_tqdm=False
             )  # type: ignore
             
-            outputs = completions.outputs
-            stop_reasons = [c.stop_reason for c in outputs]
+            stop_reasons = [c.outputs[0].stop_reason for c in completions]
             print(f"Stop reasons: {stop_reasons}")
 
         for i, completion in enumerate(completions):
