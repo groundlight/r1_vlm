@@ -3,6 +3,7 @@ import os
 import re
 from unittest.mock import patch
 
+from imgcat import imgcat
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
@@ -29,7 +30,7 @@ def evaluate(model_name_or_path:str):
     
     if not os.path.exists("generations.json"):
         sampling_params = SamplingParams(
-            temperature=0.0,
+            temperature=1.0,
             max_tokens=1024,
         )
 
@@ -126,6 +127,8 @@ def evaluate(model_name_or_path:str):
             print(f"GT answer: {gt_answer}")
             print(f"Options: {options_set}")
             print(f"Generation: {generations_dict[question_id]['generation']}")
+            print(f"Reasoning: {example['rationales']}")
+            imgcat(example["image"])
             print("--------------------------------")
         if model_answer in options_set:
             in_option_set += 1
