@@ -50,9 +50,6 @@ class AOKVQASimpleEnv(SimpleVisionEnv):
         train_dataset = concatenate_datasets([easiest, train_dataset])
         
         assert len(train_dataset) == original_len
-        
-        for example in train_dataset:
-            print(example["difficult_direct_answer"])
             
         return train_dataset, val_dataset, test_dataset
 
