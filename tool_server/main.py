@@ -91,7 +91,12 @@ async def detect(
         buffered = io.BytesIO()
         Image.fromarray(annotated_img).save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
-        
+
+        # Log the classes and visualize the image inline using iTerm2 escape codes
+        print(f"Detection complete for classes: {classes}")
+        # iTerm2 inline image protocol: \033]1337;File=inline=1:[BASE64_DATA]\a
+        print(f"\033]1337;File=inline=1:{img_str}\a")
+
         return DetectionResponse(
             results=DetectionResult(
                 detections=detections
