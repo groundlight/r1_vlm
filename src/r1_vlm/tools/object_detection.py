@@ -73,13 +73,20 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
             "label": detection["label"],
             "confidence": round(detection["confidence"], 2)
         })
+    dets_string = ""
+    for index, det in enumerate(dets):
+        dets_string += f"{index+1}. {det}"
+        
+        if index < len(dets) - 1:
+            dets_string += "\n"
+        
     
     # convert the annotated image(base64 encoded) to a PIL Image
     annotated_image_data = base64.b64decode(result["annotated_image"])
     annotated_image = Image.open(io.BytesIO(annotated_image_data))
     
     
-    return {"text_data": dets, "image_data": annotated_image}
+    return {"text_data": dets_string, "image_data": annotated_image}
     
 
 @pytest.fixture
@@ -108,24 +115,8 @@ def test_basic_detection_integration(sample_image_fixture):
         assert isinstance(result, dict)
         assert "text_data" in result
         assert "image_data" in result
-        assert isinstance(result["text_data"], list)
+        assert isinstance(result["text_data"], str)
         assert isinstance(result["image_data"], Image.Image)
-        
-
-        # Further assertions depend heavily on the actual model's response
-        # to a plain red image. We can check if the detection list is empty
-        # or contains detections, and verify the types within.
-        if result["text_data"]:
-            detection = result["text_data"][0]
-            assert isinstance(detection, dict)
-            assert "bbox_2d" in detection
-            assert "label" in detection
-            assert "confidence" in detection
-            assert isinstance(detection["bbox_2d"], list)
-            assert len(detection["bbox_2d"]) == 4
-            assert isinstance(detection["label"], str)
-            assert isinstance(detection["confidence"], float)
-            
         
         # visualize the annotated image
         annotated_image = result["image_data"]
