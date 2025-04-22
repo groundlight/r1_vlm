@@ -17,14 +17,13 @@ API_IP = str(os.getenv("API_IP"))
 API_PORT = int(os.getenv("API_PORT"))
 
 
-def detect_objects(image_name: str, classes: list[str], confidence: float, **kwargs) -> tuple[list[dict], Image.Image]:
+def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[dict], Image.Image]:
     """
     Calls an open vocabulary object detection model on the image. Filters to detections with confidence greater than or equal to the specified confidence threshold.
     
     Args:
         image_name: str, the name of the image to detect objects in.
         classes: list[str], the classes to detect. As the model is open vocabulary, your classes can be any string, even referring phrases about the scene, like "the man in the red shirt" or "the dog on the left".
-        confidence: float, the confidence threshold for the detections.
 
     Returns:
         1. A list of dictionaries, each containing the following keys:
@@ -34,8 +33,8 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
         2. The original image with the detections overlaid on it.
     
     Examples:
-        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person on the sidewalk"], "confidence": 0.2}}</tool>
-        <tool>{"name": "detect_objects", "args": {"image_name": "tool_result_1", "classes": ["elephant on the right", "white jeep"], "confidence": 0.6}}</tool>
+        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person on the sidewalk"]}}</tool>
+        <tool>{"name": "detect_objects", "args": {"image_name": "tool_result_1", "classes": ["elephant on the right", "white jeep"]}}</tool>
     """
     
     images = kwargs["images"]
@@ -47,7 +46,8 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
         )
     
     # construct the API request
-    url = f"http://{API_IP}:{API_PORT}/detect?confidence={confidence}"
+    # I decided to fix the confidence threshold at 0.25, as the model tends to set this value very high, which leads to a lot of false negatives
+    url = f"http://{API_IP}:{API_PORT}/detect?confidence={0.25}"
     
     # Convert PIL Image to bytes
     img_byte_arr = io.BytesIO()
