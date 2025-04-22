@@ -23,7 +23,7 @@ def generate_r1_messages(example):
         choices[correct_choice_idx] if correct_choice_idx is not None else None
     )
 
-    system_prompt = "You are a helpful assistant. You first think and reason about the question, then provide the user with the answer from the list of possible answers. Show your work in <think> </think> tags and return the answer in <answer> </answer> tags. Please consider each option carefully and completely while reasoning before selecting the correct answer. You may change your mind while reasoning, and circle back to previous options if they are more correct."
+    system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
     choices_str = "Possible answers: "
     for i, choice in enumerate(choices):
@@ -36,6 +36,8 @@ def generate_r1_messages(example):
     {question}
 
     {choices_str}
+    
+    You must use the tools to inspect the input image and gather visual evidence.
     """
 
     r1_messages = [
@@ -51,6 +53,7 @@ def generate_r1_messages(example):
         {
             "role": "user",
             "content": [
+                {"type": "text", "text": "<image_name> input_image </image_name>"},
                 {"type": "image", "image": IMAGE_PLACEHOLDER},
                 {"type": "text", "text": instruction},
             ],
@@ -77,7 +80,7 @@ def generate_r1_messages(example):
     }
 
 
-def create_r1_aok_vqa_mc_dataset(max_examples_per_split=None):
+def create_r1_aok_vqa_tool_use_dataset(max_examples_per_split=None):
     dataset = load_dataset("HuggingFaceM4/A-OKVQA")
 
     processed_datasets = {}
@@ -91,5 +94,3 @@ def create_r1_aok_vqa_mc_dataset(max_examples_per_split=None):
         processed_datasets[split] = Dataset.from_list(examples)
 
     return DatasetDict(processed_datasets)
-
-
