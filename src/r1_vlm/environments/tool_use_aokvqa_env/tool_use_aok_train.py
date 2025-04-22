@@ -4,10 +4,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
+
+from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
@@ -89,7 +89,7 @@ def find_target_linear_names(
 
 def train():    
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=True)
+        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=10)
@@ -113,8 +113,8 @@ def train():
         save_steps=100,
         save_total_limit=10,
         num_train_epochs=10,
-        per_device_train_batch_size=1,
-        num_generations=4,
+        per_device_train_batch_size=2,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -131,8 +131,8 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:4",
-        limit_image_per_prompt=4,
+        vllm_device="cuda:3",
+        limit_image_per_prompt=5,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
         epsilon_high=0.28,
@@ -156,4 +156,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3,4 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_4only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
