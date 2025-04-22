@@ -10,6 +10,7 @@ dependencies = [
     "imgcat>=0.6.0",
     "mobileclip",
     "ultralytics>=8.3.112",
+    "uvicorn>=0.34.2",
 ]
 
 [tool.uv.sources]

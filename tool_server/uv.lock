@@ -1235,6 +1235,7 @@ dependencies = [
     { name = "imgcat" },
     { name = "mobileclip" },
     { name = "ultralytics" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -1244,6 +1245,7 @@ requires-dist = [
     { name = "imgcat", specifier = ">=0.6.0" },
     { name = "mobileclip", git = "https://github.com/THU-MIG/yoloe.git?subdirectory=third_party%2Fml-mobileclip" },
     { name = "ultralytics", specifier = ">=8.3.112" },
+    { name = "uvicorn", specifier = ">=0.34.2" },
 ]
 
 [[package]]
