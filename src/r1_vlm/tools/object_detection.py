@@ -27,6 +27,10 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
             - "label": str, the label of the object
             - "confidence": float, the confidence score of the detection
         2. The original image with the detections overlaid on it.
+    
+    Examples:
+        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person on the sidewalk"], "confidence": 0.2}}</tool>
+        <tool>{"name": "detect_objects", "args": {"image_name": "tool_result_1", "classes": ["elephant on the right", "white jeep"], "confidence": 0.6}}</tool>
     """
     
     images = kwargs["images"]
