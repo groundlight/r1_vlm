@@ -6,12 +6,12 @@ from typing import Any, Callable, Dict, List
 from datasets import Dataset
 from PIL.Image import Image
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.tools.digits_answer_tool import get_answer
 from r1_vlm.tools.tool_prompts import DEFAULT_TOOL_PROMPT_TEMPLATE
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 
 def infer_schema_from_function(func: Callable) -> Dict[str, Any]:
@@ -236,6 +236,13 @@ class ToolVisionEnv(MultistepVisionEnv):
                     }
                 elif isinstance(result, str) and len(result.strip()) > 0:                    
                     response =  {"role": "user", "content": [{"text": self.env_parser.format(result=result), "type": "text"}]}
+                elif isinstance(result, dict) and "text_data" in result and "image_data" in result:
+                    response = {"role": "user", "content": [
+                            {"type": "text", "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>"},
+                            {"type": "image", "image": result["image_data"]},
+                            {"type": "text", "text": self.env_parser.format(result=result["text_data"])}
+                        ]
+                    }
                 else:
                     response = {"role": "user", "content": [{"text": "Error: Tool execution returned empty output.", "type": "text"}]}
             elif hasattr(parsed, "answer") and parsed.answer is not None:

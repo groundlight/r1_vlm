@@ -79,14 +79,14 @@ def zoom(
     
     # Calculate target size with size constraints
     MIN_SIZE = 28
-    MAX_SIZE = (300, 300)
+    MAX_SIZE = 300
     
     target_width = int((x_max - x_min) * magnification)
     target_height = int((y_max - y_min) * magnification)
     
     # Apply both constraints while maintaining aspect ratio
     scale_min = max(MIN_SIZE / target_width, MIN_SIZE / target_height)
-    scale_max = min(MAX_SIZE[0] / target_width, MAX_SIZE[1] / target_height)
+    scale_max = min(MAX_SIZE / target_width, MAX_SIZE / target_height)
     scale = max(min(scale_max, 1.0), scale_min)  # Use the most constraining scale
 
     target_width = int(target_width * scale)
