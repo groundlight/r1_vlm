@@ -87,7 +87,7 @@ async def detect(
         ]
         
         # Create annotated image
-        annotated_img = result.plot(conf=False, labels=True)
+        annotated_img = result.plot(conf=True, labels=True)
         buffered = io.BytesIO()
         Image.fromarray(annotated_img).save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()

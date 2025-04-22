@@ -2,14 +2,16 @@ import base64
 import io
 import os
 
+import pytest
 import requests
 from dotenv import load_dotenv
+from imgcat import imgcat
 from PIL import Image
 
 load_dotenv()
 
-BUMBERSHOOT2_IP = str(os.getenv("BUMBERSHOOT2_IP"))
-BUMBERSHOOT2_PORT = int(os.getenv("BUMBERSHOOT2_PORT"))
+API_IP = str(os.getenv("API_IP"))
+API_PORT = int(os.getenv("API_PORT"))
 
 
 def detect_objects(image_name: str, classes: list[str], confidence: float, **kwargs) -> tuple[list[dict], Image.Image]:
@@ -42,9 +44,14 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
         )
     
     # construct the API request
-    url = f"http://{BUMBERSHOOT2_IP}:{BUMBERSHOOT2_PORT}/detect?confidence={confidence}"
+    url = f"http://{API_IP}:{API_PORT}/detect?confidence={confidence}"
     
-    files = {"image": image}
+    # Convert PIL Image to bytes
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='JPEG')
+    img_byte_arr = img_byte_arr.getvalue()
+    
+    files = {"image": img_byte_arr}
     data = {}
     for c in classes:
         data.setdefault("classes", []).append(c)
@@ -64,7 +71,7 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
         dets.append({
             "bbox_2d": detection["bbox_2d"],
             "label": detection["label"],
-            "confidence": detection["confidence"]
+            "confidence": round(detection["confidence"], 2)
         })
     
     # convert the annotated image(base64 encoded) to a PIL Image
@@ -75,6 +82,65 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
     return {"text_data": dets, "image_data": annotated_image}
     
 
+@pytest.fixture
+def sample_image_fixture():
+    """Provides a simple dummy image for testing."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    img = Image.open(os.path.join(current_dir, "cars.jpeg"))
+    return {"test_image": img}
+
+
+def test_basic_detection_integration(sample_image_fixture):
+    """Tests basic object detection call against the running API."""
+    # Call the function under test - this will make a real HTTP request
+    # Using classes unlikely to be in a plain red image might be safer
+    # depending on the actual model behavior. Let's use "object".
+    try:
+        result = detect_objects(
+            image_name="test_image",
+            # there should be cars, but no dogs
+            classes=["car", "dog"], 
+            confidence=0.1,
+            images=sample_image_fixture,
+        )
+
+       
+        assert isinstance(result, dict)
+        assert "text_data" in result
+        assert "image_data" in result
+        assert isinstance(result["text_data"], list)
+        assert isinstance(result["image_data"], Image.Image)
+        
+
+        # Further assertions depend heavily on the actual model's response
+        # to a plain red image. We can check if the detection list is empty
+        # or contains detections, and verify the types within.
+        if result["text_data"]:
+            detection = result["text_data"][0]
+            assert isinstance(detection, dict)
+            assert "bbox_2d" in detection
+            assert "label" in detection
+            assert "confidence" in detection
+            assert isinstance(detection["bbox_2d"], list)
+            assert len(detection["bbox_2d"]) == 4
+            assert isinstance(detection["label"], str)
+            assert isinstance(detection["confidence"], float)
+            
+        
+        # visualize the annotated image
+        annotated_image = result["image_data"]
+        imgcat(annotated_image)
+        
+        # visualize the text data
+        print(result["text_data"])
+
+    except requests.exceptions.ConnectionError as e:
+        pytest.fail(f"API connection failed. Is the server running at http://{API_IP}:{API_PORT}? Error: {e}")
+    except Exception as e:
+        # Catch other potential errors during the API call or processing
+        pytest.fail(f"An unexpected error occurred: {e}")
+
+
     
-    
+
 
