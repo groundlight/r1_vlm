@@ -97,6 +97,8 @@ def train():
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
 
     rubric = vf_env.get_rubric()
+    
+    reward_weights = vf_env.get_reward_weights()
 
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
@@ -134,6 +136,8 @@ def train():
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
         epsilon_high=0.28,
+        # reward weights with schedules for some of the reward functions
+        reward_weights=reward_weights,
     )
 
     trainer = QwenGRPOTrainer(

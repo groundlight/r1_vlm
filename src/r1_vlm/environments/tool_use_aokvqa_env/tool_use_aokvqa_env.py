@@ -8,11 +8,10 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
 from r1_vlm.tools.object_detection import detect_objects
 from r1_vlm.tools.zoom import zoom
-
-#from r1_vlm.tools.zoom import zoom
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
 
@@ -98,6 +97,36 @@ class AOKVQAToolEnv(ToolVisionEnv):
         '''
         assistant_messages = [message["content"][0]["text"] for message in conversation if message["role"] == "assistant"]
         return assistant_messages
+    
+    def get_reward_weights(self) -> list[float]:
+        reward_functions = self.get_rubric()
+        reward_weights = []
+        for reward_function in reward_functions:
+            
+            if reward_function.__name__ == "format_reward_func":
+                # consistent small reward for formatting properly
+                schedule = 0.2
+                reward_weights.append(schedule)
+            elif reward_function.__name__ == "tool_execution_reward_func":
+                # having proper formatting will be rewarded more heavily to start, and taper off
+                schedule = create_linear_decay_schedule(start_val=0.5, end_val=0.1, n_steps=2000)
+                reward_weights.append(schedule)
+                
+            elif reward_function.__name__ == "tool_attempt_reward_func":
+                # attempting to use tools gets a large reward to start,
+                # and then decays to encourage tool use alignment with problem solving
+                schedule = create_linear_decay_schedule(start_val=1.0, end_val=0.1, n_steps=2000)
+                reward_weights.append(schedule)
+            elif reward_function.__name__ == "correct_answer_reward_func":
+                # consistent high reward for getting the answer right
+                schedule = 1.0
+                reward_weights.append(schedule)
+            else:
+                raise ValueError(f"Unknown reward function: {reward_function.__name__} encountered in get_reward_weights")
+            
+        assert len(reward_weights) == len(reward_functions), f"reward_weights and reward_functions should be the same length, but got {len(reward_weights)} and {len(reward_functions)}"
+        return reward_weights
+        
     
     
     def get_rubric(self) -> list[RewardFunc]:
@@ -255,6 +284,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
                     rewards.append(0.0)
 
             return rewards
+        
         
         
         
