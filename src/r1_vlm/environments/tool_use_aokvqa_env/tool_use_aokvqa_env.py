@@ -4,13 +4,15 @@ from datasets import Dataset, concatenate_datasets
 from transformers import AutoProcessor
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
-    create_r1_aok_vqa_mc_tool_use_dataset,
+    create_r1_aok_vqa_tool_use_dataset,
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
 from r1_vlm.tools.object_detection import detect_objects
 from r1_vlm.tools.zoom import zoom
+
+#from r1_vlm.tools.zoom import zoom
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
 
@@ -33,12 +35,13 @@ class AOKVQAToolEnv(ToolVisionEnv):
         self.dataset_name = dataset_name    
         self.parser = XMLParser(fields=["think", "answer"])
         self._fields = [("think", ["think"]), ("answer", ["answer"])]
+    
+    def parse(self, text: str, strip: bool = True):
+        return self.parser.parse(text, strip=strip)
 
     
-    
-    
     def get_dataset(self) -> tuple[Dataset, Dataset, Dataset]:
-        dataset = create_r1_aok_vqa_mc_tool_use_dataset()
+        dataset = create_r1_aok_vqa_tool_use_dataset()
 
         train_dataset = dataset["train"]
         val_dataset = dataset["validation"]
@@ -165,7 +168,96 @@ class AOKVQAToolEnv(ToolVisionEnv):
             merged_completion_conversations = preprocessed_data["merged_completion_conversations"]
             
             return [check_format(m) for m in merged_completion_conversations]
+
+        def tool_execution_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            """
+            Reward function that checks if tools were executed successfully.
+            Returns a reward based on the ratio of successful tool executions to total attempts.
+            """
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            def check_execution(conversation):
+                tool_attempts = 0
+                successful_executions = 0
+                
+                for i, message in enumerate(conversation):
+                    if message["role"] == "assistant":
+                        parsed = self.llm_parser.parse(message["content"][0]["text"])
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            tool_attempts += 1
+                            if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
+                                response = conversation[i + 1]["content"][0]["text"]
+                                if "Error:" not in response:
+                                    successful_executions += 1
+                
+                return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
+            
+            rewards = [check_execution(conv) for conv in merged_completion_conversations]
+            return rewards
         
-        return [format_reward_func]
+        def tool_attempt_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            """
+            Reward function that gives a small fixed reward for each attempted tool execution.
+            Unlike tool_execution_reward_func, this doesn't penalize failed attempts.
+            Maximum reward is 1.0 to avoid hacking. 
+            """
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+            
+            def count_successes(conversation):
+                reward_per_success = 0.2  # Small reward for each tool attempt
+                tool_attempts = 0
+                for i, message in enumerate(conversation):
+                    if message["role"] == "assistant":
+                        parsed = self.llm_parser.parse(message["content"][0]["text"])
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            tool_attempts += 1
+                
+                return min(tool_attempts * reward_per_success, 1.0)
+
+            rewards = [count_successes(conv) for conv in merged_completion_conversations]
+            return rewards
+        
+        def correct_answer_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
+            '''
+            Provides a reward if the model's answer is correct.
+            '''
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
+                
+            # select the last message in each completion (completions are conversations) 
+            texts = [c[-1]["content"][0]["text"] for c in merged_completion_conversations]
+            
+            # extract the answer from the completion messages
+            answers = []
+            for text in texts:
+                parsed = self.parser.parse(text)
+                if hasattr(parsed, "answer"):
+                    answers.append(parsed.answer)
+                else:
+                    answers.append(None)
+
+            # strip whitespace from answers
+            for answer in answers:
+                if isinstance(answer, str):
+                    answer = answer.strip()
+
+            correct_answers = kwargs["multiple_choice_answer"]
+
+            if len(correct_answers) != len(answers):
+                raise ValueError(
+                    f"The number of correct answers ({len(correct_answers)}) does not match the number of answers ({len(answers)})"
+                )
+
+            rewards = []
+            for answer, correct_answer in zip(answers, correct_answers):
+                if answer == correct_answer:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
+
+            return rewards
+        
+        
+        
+        return [format_reward_func, tool_execution_reward_func, tool_attempt_reward_func, correct_answer_reward_func]
 
 

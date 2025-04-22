@@ -170,7 +170,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         return dict(images_list)
         
         
-    def call_tool(self, tool_json: str, messages: List[Dict[str, str]], images: Dict[str, Image], **kwargs: Any) -> str | Image:
+    def call_tool(self, tool_json: str, messages: List[Dict[str, str]], images: Dict[str, Image], **kwargs: Any) -> str | Image | dict:
         """
         Call a tool based on JSON command. 
         All tools are passed messages as a kwarg.
@@ -198,11 +198,10 @@ class ToolVisionEnv(MultistepVisionEnv):
             
             # Call the tool function with arguments
             result = tool_func(**tool_args, **kwargs)
-            if isinstance(result, Image):
-                # if the result is a Image, return it directly
-                return result
+            if isinstance(result, (str, Image, dict)):
+                 return result
             else:
-                # otherwise, return the result as a string
+                # Convert other types to string as a fallback
                 return str(result)
         except json.JSONDecodeError:
             return "Error: Invalid JSON format"

@@ -2,6 +2,9 @@ import base64
 import io
 import os
 
+# Add imports for numpy and cv2
+import cv2
+import numpy as np
 import pytest
 import requests
 from dotenv import load_dotenv
@@ -73,9 +76,13 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
             "label": detection["label"],
             "confidence": round(detection["confidence"], 2)
         })
-    dets_string = ""
-    for index, det in enumerate(dets):
-        dets_string += f"{index+1}. {det}"
+    
+    if len(dets) == 0:
+        dets_string = "No objects detected."
+    else:
+        dets_string = ""
+        for index, det in enumerate(dets):
+            dets_string += f"{index+1}. {det}"
         
         if index < len(dets) - 1:
             dets_string += "\n"
@@ -83,7 +90,27 @@ def detect_objects(image_name: str, classes: list[str], confidence: float, **kwa
     
     # convert the annotated image(base64 encoded) to a PIL Image
     annotated_image_data = base64.b64decode(result["annotated_image"])
-    annotated_image = Image.open(io.BytesIO(annotated_image_data))
+    annotated_image_pil = Image.open(io.BytesIO(annotated_image_data))
+
+    # Convert PIL Image to NumPy array (OpenCV format)
+    # PIL images with mode 'RGB' are loaded as NumPy arrays with shape (H, W, 3) in RGB order.
+    # PIL images with mode 'RGBA' are loaded as NumPy arrays with shape (H, W, 4) in RGBA order.
+    annotated_image_np = np.array(annotated_image_pil)
+
+    # Convert BGR(A) to RGB(A) using OpenCV if it's a color image
+    # Assuming the source API sent BGR/BGRA data, which np.array converted retaining channel order relative to PIL's interpretation.
+    # If PIL interpreted as RGB, the np array is RGB. If RGBA, the np array is RGBA.
+    # Since the *source* was BGR/BGRA, we convert the numpy array from BGR/BGRA to RGB/RGBA.
+    if annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 3: # RGB/BGR
+        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGR2RGB)
+    elif annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 4: # RGBA/BGRA
+        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGRA2RGBA)
+    else:
+        # Grayscale or other formats, no conversion needed
+        annotated_image_np_rgb = annotated_image_np
+
+    # Convert NumPy array back to PIL Image
+    annotated_image = Image.fromarray(annotated_image_np_rgb)
     
     
     return {"text_data": dets_string, "image_data": annotated_image}
