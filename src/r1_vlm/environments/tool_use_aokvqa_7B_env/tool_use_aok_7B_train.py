@@ -113,7 +113,7 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         # TODO: reduce this to 100
-        save_steps=1,
+        save_steps=50,
         save_total_limit=5,
         num_train_epochs=10,
         per_device_train_batch_size=2,
