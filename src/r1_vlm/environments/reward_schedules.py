@@ -12,8 +12,7 @@ def create_linear_decay_schedule(start_val: float, end_val: float, n_steps: int)
         A function that takes the current step (int) and returns the
         scheduled value (float).
     """
-    if not 0.0 <= start_val <= 1.0:
-        raise ValueError("start_val must be between 0.0 and 1.0")
+
     if not 0.0 <= end_val <= 1.0:
         raise ValueError("end_val must be between 0.0 and 1.0")
     if n_steps <= 0:
@@ -31,8 +30,8 @@ def create_linear_decay_schedule(start_val: float, end_val: float, n_steps: int)
         Calculates the value for the current step based on the schedule.
         """
         if current_step <= 0:
-             # Or handle as an error, depending on desired behavior for step 0 or negative
-             return start_val
+            # Or handle as an error, depending on desired behavior for step 0 or negative
+            return start_val
         elif current_step >= n_steps:
             return end_val
         else:
@@ -44,7 +43,7 @@ def create_linear_decay_schedule(start_val: float, end_val: float, n_steps: int)
             # This depends on whether start_val > end_val or vice versa
             if start_val >= end_val:
                 return max(end_val, current_val)
-            else: # Handles linear increase case too
+            else:  # Handles linear increase case too
                 return min(end_val, current_val)
 
     return schedule_function
