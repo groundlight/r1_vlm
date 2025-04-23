@@ -19,7 +19,7 @@ API_PORT = int(os.getenv("API_PORT"))
 
 def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[dict], Image.Image]:
     """
-    Calls an open vocabulary object detection model on the image. Filters to detections with confidence greater than or equal to the specified confidence threshold.
+    Calls an open vocabulary object detection model on the image. Useful for localizing objects in an image or determining if an object is present.
     
     Args:
         image_name: str, the name of the image to detect objects in. Can only be called on the "input_image" image.

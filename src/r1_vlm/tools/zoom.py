@@ -14,7 +14,7 @@ def zoom(
     This tool is useful to see a portion of an image in more detail. 
 
     Args:
-        image_name: str, the name of the image to zoom in on.
+        image_name: str, the name of the image to zoom in on. Can only be called on the "input_image" image.
         bbox: list[int], the bounding box to zoom in on. The bounding box is in the format of [x_min, y_min, x_max, y_max],
             where (x_min, y_min) is the top-left corner and (x_max, y_max) is the bottom-right corner.
         magnification: float, the magnification factor. Must be equal to or greater than 1.0.
@@ -24,7 +24,7 @@ def zoom(
 
     Examples:
         <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [250, 100, 300, 150], "magnification": 1.0}}</tool>
-        <tool>{"name": "zoom", "args": {"image_name": "tool_result_1", "bbox": [130, 463, 224, 556], "magnification": 2.4}}</tool>
+        <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [130, 463, 224, 556], "magnification": 2.4}}</tool>
     """
     # get and validate the image
     images = kwargs["images"]
@@ -34,6 +34,9 @@ def zoom(
         raise ValueError(
             f"Error: Image {image_name} not found. Valid image names are: {valid_image_names}"
         )
+    
+    if image_name != "input_image":
+        raise ValueError(f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image.")
 
     width, height = image.size
 
