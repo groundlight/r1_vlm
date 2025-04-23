@@ -32,8 +32,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
         )
         
         self.dataset_name = dataset_name    
-        self.parser = XMLParser(fields=["think", "answer"])
-        self._fields = [("think", ["think"]), ("answer", ["answer"])]
+        self.parser = XMLParser(fields=["think", "answer", "tool"])
+        self._fields = [("think", ["think"]), ("answer", ["answer"]), ("tool", ["tool"])]
     
     def parse(self, text: str, strip: bool = True):
         return self.parser.parse(text, strip=strip)
