@@ -90,8 +90,13 @@ def find_target_linear_names(
 
 
 def train():
+    checkpoint = "/workspace/vlm-r1-tool-use-aokvqa-env/checkpoint-50"
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(
+            model_name_or_path=checkpoint,
+            gradient_checkpointing=True,
+            use_peft=False,
+        )
     )
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
@@ -105,19 +110,18 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="/workspace/vlm-r1-tool-use-aokvqa-env",
+        output_dir="/workspace/vlm-r1-tool-use-aokvqa-env-restart",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
         lr_scheduler_type="cosine",
         warmup_steps=10,
         logging_steps=1,
-        # TODO: reduce this to 100
         save_steps=50,
-        save_total_limit=5,
+        save_total_limit=4,
         num_train_epochs=10,
-        per_device_train_batch_size=3,
-        num_generations=18,
+        per_device_train_batch_size=2,
+        num_generations=12,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
