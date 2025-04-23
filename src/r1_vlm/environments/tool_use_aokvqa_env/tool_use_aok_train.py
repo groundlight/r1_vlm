@@ -88,9 +88,8 @@ def find_target_linear_names(
 
 
 def train():    
-    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-tool-use-aokvqa-env/checkpoint-200"
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=10)

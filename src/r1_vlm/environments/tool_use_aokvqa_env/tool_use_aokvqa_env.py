@@ -109,13 +109,13 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # having proper formatting will be rewarded more heavily to start, and taper off
-                schedule = create_linear_decay_schedule(start_val=0.46, end_val=0.1, n_steps=1800)
+                schedule = create_linear_decay_schedule(start_val=0.5, end_val=0.1, n_steps=1500)
                 reward_weights.append(schedule)
                 
             elif reward_function.__name__ == "tool_attempt_reward_func":
                 # attempting to use tools gets a large reward to start,
                 # and then decays to encourage tool use alignment with problem solving
-                schedule = create_linear_decay_schedule(start_val=0.91, end_val=0.1, n_steps=1800)
+                schedule = create_linear_decay_schedule(start_val=1.0, end_val=0.1, n_steps=1500)
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "correct_answer_reward_func":
                 # consistent high reward for getting the answer right
@@ -227,53 +227,46 @@ class AOKVQAToolEnv(ToolVisionEnv):
         def tool_attempt_reward_func(prompts, completions, completions_messages, **kwargs) -> list[float]:
             """
             Reward function that gives a small fixed reward for each attempted tool execution.
-            Unlike tool_execution_reward_func, this differentiates between successful (0.2) and failed (0.1) attempts.
-            Maximum reward is 1.0 to avoid hacking.
+            Unlike tool_execution_reward_func, this doesn't penalize failed attempts.
+            Maximum reward is 1.0 to avoid hacking. 
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(prompts_messages=prompts, completions_messages=completions_messages)
-
+            
             def count_successes(conversation):
-                reward_success = 0.2  # Reward for successful tool attempt
-                reward_fail = 0.1   # Reward for failed tool attempt
-                total_reward = 0.0
+                reward_per_success = 0.2  # Small reward for each tool attempt
+                reward_per_failure = 0.1  # Small reward for each failed tool attempt
+                
+                successes = 0
+                failures = 0
+                
                 for i, message in enumerate(conversation):
                     if message["role"] == "assistant":
-                        # Attempt to parse the message for a tool call
                         try:
-                            # Assuming message content is structured like [{"type": "text", "text": "..."}]
-                            text_content = ""
-                            if isinstance(message.get("content"), list) and len(message["content"]) > 0:
-                                if isinstance(message["content"][0], dict) and "text" in message["content"][0]:
-                                     text_content = message["content"][0]["text"]
-
-                            if not text_content:
-                                continue # Skip if no text content found
-
-                            parsed = self.parser.parse(text_content)
-                            if hasattr(parsed, "tool") and parsed.tool is not None:
-                                # Check the next message for the tool execution result
-                                is_successful = False
-                                if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
-                                    # Assuming the response is in the same format
-                                    response_content = conversation[i+1].get("content")
-                                    response_text = ""
-                                    if isinstance(response_content, list) and len(response_content) > 0:
-                                        if isinstance(response_content[0], dict) and "text" in response_content[0]:
-                                            response_text = response_content[0]["text"]
-
-                                    if response_text and "Error:" not in response_text:
-                                        is_successful = True
-
-                                if is_successful:
-                                    total_reward += reward_success
+                            parsed = self.parser.parse(message["content"][0]["text"])
+                        except Exception as e:
+                            # no reward if parsing fails
+                            print(f"Error parsing message during tool attempt reward: {e}")
+                            continue
+                        
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            # check if the next message for if the tool call was successful
+                            if i + 1 < len(conversation) and conversation[i + 1]["role"] == "user":
+                                # collect all the text from the content
+                                text_content = ""
+                                for element in conversation[i + 1]["content"]:
+                                    if element.get("type") == "text":
+                                        text_content += element["text"]
+                                        
+                                # check if the text contains an error
+                                if "Error:" in text_content:
+                                    failures += 1
                                 else:
-                                    total_reward += reward_fail
-                        except Exception:
-                            # Handle cases where parsing might fail or message structure is unexpected
-                            # Assign fail reward if parsing indicates a malformed attempt
-                             total_reward += reward_fail
-
-                return min(total_reward, 1.0)
+                                    successes += 1
+                            else:
+                                # assume tool call failed if there is no next message or if the next message is not a user message
+                                failures += 1
+                
+                return min(successes * reward_per_success + failures * reward_per_failure, 1.0)
 
             rewards = [count_successes(conv) for conv in merged_completion_conversations]
             return rewards
