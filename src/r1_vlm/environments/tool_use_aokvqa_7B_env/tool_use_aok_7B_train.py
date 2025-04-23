@@ -91,7 +91,7 @@ def find_target_linear_names(
 
 def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=False, use_peft=False)
+        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
