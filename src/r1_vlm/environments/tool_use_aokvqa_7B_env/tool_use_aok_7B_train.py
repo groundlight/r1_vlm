@@ -117,7 +117,7 @@ def train():
         num_train_epochs=10,
         # reduce batch size to 1x3 due to OOM
         per_device_train_batch_size=1,
-        num_generations=3,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -134,7 +134,7 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:3",
+        vllm_device="cuda:6",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
@@ -159,4 +159,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_7B_env/tool_use_aok_7B_train.py
