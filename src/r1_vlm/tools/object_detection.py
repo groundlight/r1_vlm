@@ -22,7 +22,7 @@ def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[
     Calls an open vocabulary object detection model on the image. Filters to detections with confidence greater than or equal to the specified confidence threshold.
     
     Args:
-        image_name: str, the name of the image to detect objects in.
+        image_name: str, the name of the image to detect objects in. Can only be called on the "input_image" image.
         classes: list[str], the classes to detect. As the model is open vocabulary, your classes can be any string, even referring phrases about the scene, like "the man in the red shirt" or "the dog on the left".
 
     Returns:
@@ -34,7 +34,7 @@ def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[
     
     Examples:
         <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person on the sidewalk"]}}</tool>
-        <tool>{"name": "detect_objects", "args": {"image_name": "tool_result_1", "classes": ["elephant on the right", "white jeep"]}}</tool>
+        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["elephant on the right", "white jeep"]}}</tool>
     """
     
     images = kwargs["images"]
@@ -44,6 +44,10 @@ def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[
         raise ValueError(
             f"Error: Image {image_name} not found. Valid image names are: {valid_image_names}"
         )
+    
+    # only allow the input_image to be used, as the model tends to call this tool on very small zooms, which is not helpful
+    if image_name != "input_image":
+        raise ValueError(f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image.")
     
     # construct the API request
     # I decided to fix the confidence threshold at 0.25, as the model tends to set this value very high, which leads to a lot of false negatives
@@ -84,8 +88,8 @@ def detect_objects(image_name: str, classes: list[str], **kwargs) -> tuple[list[
         for index, det in enumerate(dets):
             dets_string += f"{index+1}. {det}"
         
-        if index < len(dets) - 1:
-            dets_string += "\n"
+            if index < len(dets) - 1:
+                dets_string += "\n"
         
     
     # convert the annotated image(base64 encoded) to a PIL Image
@@ -121,7 +125,7 @@ def sample_image_fixture():
     """Provides a simple dummy image for testing."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     img = Image.open(os.path.join(current_dir, "cars.jpeg"))
-    return {"test_image": img}
+    return {"input_image": img}
 
 
 def test_basic_detection_integration(sample_image_fixture):
@@ -131,10 +135,9 @@ def test_basic_detection_integration(sample_image_fixture):
     # depending on the actual model behavior. Let's use "object".
     try:
         result = detect_objects(
-            image_name="test_image",
+            image_name="input_image",
             # there should be cars, but no dogs
             classes=["car", "dog"], 
-            confidence=0.1,
             images=sample_image_fixture,
         )
 
