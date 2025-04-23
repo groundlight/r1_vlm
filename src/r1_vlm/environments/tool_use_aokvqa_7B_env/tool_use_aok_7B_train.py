@@ -91,7 +91,7 @@ def find_target_linear_names(
 
 def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(gradient_checkpointing=False, use_peft=False)
     )
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
@@ -112,8 +112,9 @@ def train():
         lr_scheduler_type="cosine",
         warmup_steps=10,
         logging_steps=1,
-        save_steps=100,
-        save_total_limit=10,
+        # TODO: reduce this to 100
+        save_steps=1,
+        save_total_limit=5,
         num_train_epochs=10,
         per_device_train_batch_size=2,
         num_generations=12,
