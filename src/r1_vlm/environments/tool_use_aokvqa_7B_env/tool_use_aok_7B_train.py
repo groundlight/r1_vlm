@@ -115,9 +115,8 @@ def train():
         save_steps=100,
         save_total_limit=10,
         num_train_epochs=10,
-        # reduce batch size to 1x3 due to OOM
-        per_device_train_batch_size=1,
-        num_generations=6,
+        per_device_train_batch_size=2,
+        num_generations=12,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,

@@ -5,8 +5,8 @@ from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
 
-from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
-    create_r1_aok_vqa_tool_use_dataset,
+from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_7B_r1 import (
+    create_r1_aok_vqa_tool_use_7B_dataset,
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
@@ -41,7 +41,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
         return self.parser.parse(text, strip=strip)
 
     def get_dataset(self) -> tuple[Dataset, Dataset, Dataset]:
-        dataset = create_r1_aok_vqa_tool_use_dataset()
+        dataset = create_r1_aok_vqa_tool_use_7B_dataset()
 
         train_dataset = dataset["train"]
         val_dataset = dataset["validation"]
