@@ -112,7 +112,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # having proper formatting will be rewarded more heavily to start, and taper off
                 schedule = create_linear_decay_schedule(
-                    start_val=1.0, end_val=0.1, n_steps=1500
+                    start_val=0.948, end_val=0.1, n_steps=1350
                 )
                 reward_weights.append(schedule)
 
