@@ -90,7 +90,7 @@ def find_target_linear_names(
 
 
 def train():
-    checkpoint = "/workspace/vlm-r1-tool-use-aokvqa-env-restart/checkpoint-100"
+    checkpoint = "/workspace/checkpoint_from_s3/checkpoint-200"
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(
             model_name_or_path=checkpoint,
