@@ -11,7 +11,8 @@ def zoom(
 ) -> Image.Image:
     """
     Returns the original image, cropped into the region specified by the bounding box, and then resized to the specified magnification.
-    This tool is useful to see a portion of an image in more detail. 
+    This tool is useful to see a portion of an image in more detail. Generally, avoid selecting a region that is too small.
+    Ideally, aim for a region that is at least 100 x 100 pixels.
 
     Args:
         image_name: str, the name of the image to zoom in on. Can only be called on the "input_image" image.
@@ -34,9 +35,11 @@ def zoom(
         raise ValueError(
             f"Error: Image {image_name} not found. Valid image names are: {valid_image_names}"
         )
-    
+
     if image_name != "input_image":
-        raise ValueError(f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image.")
+        raise ValueError(
+            f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image."
+        )
 
     width, height = image.size
 
@@ -79,14 +82,14 @@ def zoom(
 
     # crop the image to the bounding box
     cropped_image = image.crop(bbox)
-    
+
     # Calculate target size with size constraints
-    MIN_SIZE = 28
+    MIN_SIZE = 50
     MAX_SIZE = 300
-    
+
     target_width = int((x_max - x_min) * magnification)
     target_height = int((y_max - y_min) * magnification)
-    
+
     # Apply both constraints while maintaining aspect ratio
     scale_min = max(MIN_SIZE / target_width, MIN_SIZE / target_height)
     scale_max = min(MAX_SIZE / target_width, MAX_SIZE / target_height)
@@ -94,19 +97,19 @@ def zoom(
 
     target_width = int(target_width * scale)
     target_height = int(target_height * scale)
-    
+
     # Validate aspect ratio
     aspect_ratio = max(target_width, target_height) / min(target_width, target_height)
     if aspect_ratio > 200:
         raise ValueError("Error: absolute aspect ratio must be smaller than 200")
-    
-    output_image = cropped_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-    
+
+    output_image = cropped_image.resize(
+        (target_width, target_height), Image.Resampling.LANCZOS
+    )
+
     print(f"Zoom tool output image size: {output_image.size}")
 
     return output_image
-
-
 
 
 @pytest.fixture
@@ -158,57 +161,60 @@ def test_invalid_magnification_value(sample_image):
 
 
 def test_basic_zoom_no_magnification(sample_image):
-    result = zoom('test_image', [20, 20, 40, 40], 1.0, images=sample_image)
+    result = zoom("test_image", [20, 20, 40, 40], 1.0, images=sample_image)
     assert isinstance(result, Image.Image)
     assert result.size == (28, 28)  # Should match minimum size constraint
 
+
 def test_zoom_with_magnification(sample_image):
-    result = zoom('test_image', [20, 20, 40, 40], 2.0, images=sample_image)
+    result = zoom("test_image", [20, 20, 40, 40], 2.0, images=sample_image)
     assert result.size == (40, 40)  # Should be 2x the bbox dimensions
+
 
 def test_zoom_max_size_constraint(sample_image):
     # Try to zoom beyond MAX_SIZE (300x300)
-    result = zoom('test_image', [0, 0, 80, 80], 4.0, images=sample_image)
+    result = zoom("test_image", [0, 0, 80, 80], 4.0, images=sample_image)
     assert max(result.size) <= 300  # Should be constrained to MAX_SIZE
+
 
 def test_zoom_different_regions(sample_image):
     # Test corners and center
     regions = [
-        [0, 0, 20, 20],          # Top-left
-        [80, 0, 99, 20],         # Top-right
-        [40, 40, 60, 60],        # Center
-        [0, 80, 20, 99],         # Bottom-left
-        [80, 80, 99, 99],        # Bottom-right
+        [0, 0, 20, 20],  # Top-left
+        [80, 0, 99, 20],  # Top-right
+        [40, 40, 60, 60],  # Center
+        [0, 80, 20, 99],  # Bottom-left
+        [80, 80, 99, 99],  # Bottom-right
     ]
-    
+
     for bbox in regions:
-        result = zoom('test_image', bbox, 1.5, images=sample_image)
+        result = zoom("test_image", bbox, 1.5, images=sample_image)
         expected_width = int(min((bbox[2] - bbox[0]) * 1.5, 300))
         expected_height = int(min((bbox[3] - bbox[1]) * 1.5, 300))
         assert result.size == (expected_width, expected_height)
 
+
 def test_zoom_preserve_content(sample_image):
     bbox = [20, 20, 40, 40]
-    original = sample_image['test_image'].crop(bbox)
-    zoomed = zoom('test_image', bbox, 1.0, images=sample_image)
-    
+    original = sample_image["test_image"].crop(bbox)
+    zoomed = zoom("test_image", bbox, 1.0, images=sample_image)
+
     # Compare a few pixels to ensure content is preserved
     assert original.getpixel((0, 0)) == zoomed.getpixel((0, 0))
     assert original.getpixel((10, 10)) == zoomed.getpixel((10, 10))
 
+
 def test_zoom_aspect_ratio(sample_image):
     # Test with non-square regions
-    wide_bbox = [20, 20, 60, 30]    # Wide rectangle (40x10)
-    tall_bbox = [20, 20, 30, 60]    # Tall rectangle (10x40)
-    
-    wide_result = zoom('test_image', wide_bbox, 1.5, images=sample_image)
-    tall_result = zoom('test_image', tall_bbox, 1.5, images=sample_image)
-    
+    wide_bbox = [20, 20, 60, 30]  # Wide rectangle (40x10)
+    tall_bbox = [20, 20, 30, 60]  # Tall rectangle (10x40)
+
+    wide_result = zoom("test_image", wide_bbox, 1.5, images=sample_image)
+    tall_result = zoom("test_image", tall_bbox, 1.5, images=sample_image)
+
     # Check if aspect ratios are preserved
     wide_ratio = wide_result.size[0] / wide_result.size[1]
     tall_ratio = tall_result.size[0] / tall_result.size[1]
-    
+
     assert abs(wide_ratio - 4) < 0.1  # Should be close to 4:1
     assert abs(tall_ratio - 0.25) < 0.1  # Should be close to 1:4
-
-

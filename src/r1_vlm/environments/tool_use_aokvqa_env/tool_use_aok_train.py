@@ -87,23 +87,23 @@ def find_target_linear_names(
     return lora_module_names
 
 
-def train():    
+def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
 
-    vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=10)
+    vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
 
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
 
     rubric = vf_env.get_rubric()
-    
+
     reward_weights = vf_env.get_reward_weights()
 
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-tool-use-aokvqa-env",
+        output_dir="vlm-r1-tool-use-aokvqa-env-reduced-beta-single-tool",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
@@ -113,9 +113,8 @@ def train():
         save_steps=100,
         save_total_limit=10,
         num_train_epochs=10,
-        # reduce batch size to 1x3 due to OOM
-        per_device_train_batch_size=1,
-        num_generations=3,
+        per_device_train_batch_size=2,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -123,7 +122,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.001,
+        beta=1e-5 if peft_config is not None else 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,
@@ -133,7 +132,7 @@ def train():
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
         vllm_device="cuda:3",
-        limit_image_per_prompt=5,
+        limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
         epsilon_high=0.28,
@@ -157,4 +156,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-#CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
