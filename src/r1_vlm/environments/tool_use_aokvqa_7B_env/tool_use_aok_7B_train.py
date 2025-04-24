@@ -110,7 +110,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="/workspace/vlm-r1-tool-use-aokvqa-env-restart-2",
+        output_dir="/workspace/vlm-r1-tool-use-aokvqa-env-restart-lower-beta",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
@@ -118,7 +118,7 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=4,
+        save_total_limit=3,
         num_train_epochs=10,
         per_device_train_batch_size=2,
         num_generations=12,
@@ -129,7 +129,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.001,
+        beta=1e-5 if peft_config is not None else 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,

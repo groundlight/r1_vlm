@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from datasets import Dataset, concatenate_datasets
+from datasets import Dataset
 from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
@@ -10,8 +10,8 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_7B_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import zoom
 
 
@@ -22,11 +22,13 @@ class AOKVQAToolEnv(ToolVisionEnv):
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools: list[Callable] = [zoom],
         max_steps: int = 3,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
     ):
         super().__init__(
             processing_class=processing_class,
             tools=tools,
             max_steps=max_steps,
+            tool_prompt_template=tool_prompt_template,
         )
 
         self.dataset_name = dataset_name
@@ -56,20 +58,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
         val_dataset = preprocess_r1_dataset(val_dataset)
         test_dataset = preprocess_r1_dataset(test_dataset)
 
-        # reorganize the train dataset to frontload harder data.
-        original_len = len(train_dataset)
-
-        # sort so the difficult examples are at the top of the stack. We want to use these!
-        train_dataset = train_dataset.sort("difficult_direct_answer", reverse=True)
-
-        # start with some easy examples first, then move to train on the difficult examples
-        num_easy = 100
-        total_len = len(train_dataset)
-        easiest = train_dataset.select(range(total_len - num_easy, total_len))
-        rest = train_dataset.select(range(total_len - num_easy))
-        train_dataset = concatenate_datasets([easiest, rest])
-
-        assert len(train_dataset) == original_len
+        # shuffle the train dataset
+        train_dataset = train_dataset.shuffle()
 
         return train_dataset, val_dataset, test_dataset
 
@@ -111,9 +101,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # having proper formatting will be rewarded more heavily to start, and taper off
-                schedule = create_linear_decay_schedule(
-                    start_val=0.948, end_val=0.1, n_steps=1350
-                )
+                schedule = 0.5
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
