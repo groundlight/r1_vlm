@@ -156,4 +156,4 @@ def train():
 if __name__ == "__main__":
     train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only_zero3.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
