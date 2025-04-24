@@ -25,7 +25,7 @@ def detect_objects(
 
     Args:
         image_name: str, the name of the image to detect objects in. Can only be called on the "input_image" image.
-        classes: list[str], the classes to detect. As the model is open vocabulary, your classes can be any object you want to detect in the image.
+        classes: list[str], the classes to detect. As the model is open vocabulary, your classes can be any object you want to detect in the image. Each class should contain an noun for best results.
 
     Returns:
         1. A list of dictionaries, each containing the following keys:
