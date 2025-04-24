@@ -190,6 +190,10 @@ class AOKVQAToolEnv(ToolVisionEnv):
                     if ends_with_any_field:
                         format_score += 0.2
 
+                    print(
+                        f"text_content: {text_content},\nhas_any_field: {has_any_field},\nhas_correct_spacing: {has_correct_spacing},\nstarts_with_any_field: {starts_with_any_field},\nends_with_any_field: {ends_with_any_field},\nformat_score: {format_score}"
+                    )
+
                     format_scores.append(format_score)
                 if not format_scores:
                     return 0.0
