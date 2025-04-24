@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from datasets import Dataset, concatenate_datasets
+from datasets import Dataset
 from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
@@ -10,9 +10,9 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolVisionEnv
 from r1_vlm.tools.object_detection import detect_objects
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import zoom
 
 
@@ -22,12 +22,14 @@ class AOKVQAToolEnv(ToolVisionEnv):
         processing_class: AutoProcessor,
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools: list[Callable] = [detect_objects, zoom],
-        max_steps: int = 8,
+        max_steps: int = 3,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
     ):
         super().__init__(
             processing_class=processing_class,
             tools=tools,
             max_steps=max_steps,
+            tool_prompt_template=tool_prompt_template,
         )
 
         self.dataset_name = dataset_name
@@ -57,20 +59,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
         val_dataset = preprocess_r1_dataset(val_dataset)
         test_dataset = preprocess_r1_dataset(test_dataset)
 
-        # reorganize the train dataset to frontload harder data.
-        original_len = len(train_dataset)
-
-        # sort so the difficult examples are at the top of the stack. We want to use these!
-        train_dataset = train_dataset.sort("difficult_direct_answer", reverse=True)
-
-        # start with some easy examples first, then move to train on the difficult examples
-        num_easy = 100
-        total_len = len(train_dataset)
-        easiest = train_dataset.select(range(total_len - num_easy, total_len))
-        rest = train_dataset.select(range(total_len - num_easy))
-        train_dataset = concatenate_datasets([easiest, rest])
-
-        assert len(train_dataset) == original_len
+        # shuffle the train dataset
+        train_dataset = train_dataset.shuffle()
 
         return train_dataset, val_dataset, test_dataset
 
@@ -111,20 +101,9 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 schedule = 0.2
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                # having proper formatting will be rewarded more heavily to start, and taper off
-                schedule = create_linear_decay_schedule(
-                    start_val=0.5, end_val=0.1, n_steps=1500
-                )
+                schedule = 0.5
                 reward_weights.append(schedule)
 
-            elif reward_function.__name__ == "tool_attempt_reward_func":
-                # attempting to use tools gets a large reward to start,
-                # and then decays to encourage tool use alignment with problem solving
-                # set the start value > 1.0 as this is a partial reward, and we really want to boost this signal.
-                schedule = create_linear_decay_schedule(
-                    start_val=2.0, end_val=0.1, n_steps=1500
-                )
-                reward_weights.append(schedule)
             elif reward_function.__name__ == "correct_answer_reward_func":
                 # consistent high reward for getting the answer right
                 schedule = 1.0
@@ -265,45 +244,6 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ]
             return rewards
 
-        def tool_attempt_reward_func(
-            prompts, completions, completions_messages, **kwargs
-        ) -> list[float]:
-            """
-            Reward function that gives a small fixed reward for each attempted tool execution.
-            It gets a larger reward for successful executions than failed executions.
-            Maximum reward is 1.0 to avoid too much hacking.
-            """
-
-            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
-                prompts_messages=prompts, completions_messages=completions_messages
-            )
-
-            def check_execution(conversation):
-                tool_attempts = 0
-                successful_executions = 0
-
-                for i, message in enumerate(conversation):
-                    if message["role"] == "assistant":
-                        parsed = self.llm_parser.parse(message["content"][0]["text"])
-                        if hasattr(parsed, "tool") and parsed.tool is not None:
-                            tool_attempts += 1
-                            if (
-                                i + 1 < len(conversation)
-                                and conversation[i + 1]["role"] == "user"
-                            ):
-                                response = conversation[i + 1]["content"][0]["text"]
-                                if "Error:" not in response:
-                                    successful_executions += 1
-
-                failed_executions = tool_attempts - successful_executions
-                reward = 0.1 * failed_executions + 0.2 * successful_executions
-                return min(reward, 1.0)
-
-            rewards = [
-                check_execution(conv) for conv in merged_completion_conversations
-            ]
-            return rewards
-
         def correct_answer_reward_func(
             prompts, completions, completions_messages, **kwargs
         ) -> list[float]:
@@ -352,6 +292,5 @@ class AOKVQAToolEnv(ToolVisionEnv):
         return [
             format_reward_func,
             tool_execution_reward_func,
-            tool_attempt_reward_func,
             correct_answer_reward_func,
         ]
