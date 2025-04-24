@@ -19,7 +19,7 @@ If the tool includes the argument "image_name", you must provide it the name of 
 
 
 SINGLE_TOOL_PROMPT_TEMPLATE = """\
-You may use each tool as many times as needed. You have access to the following tools to help solve problems: 
+You may call any of the tools exactly one time. You have access to the following tools to help solve problems: 
 
 {tool_descriptions}
 
