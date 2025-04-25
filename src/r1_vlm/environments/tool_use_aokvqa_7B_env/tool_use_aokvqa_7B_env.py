@@ -200,16 +200,6 @@ class AOKVQAToolEnv(ToolVisionEnv):
                     if valid_end:  # Should end with tool/answer if structure is valid
                         format_score += 0.2
 
-                    # Debug print (optional, can be removed)
-                    print(
-                        f"text_content: {text_content},\n"
-                        f"has_think: {has_think}, has_tool: {has_tool}, has_answer: {has_answer}, "
-                        f"is_valid_structure: {is_valid_structure},\n"
-                        f"has_correct_spacing: {has_correct_spacing}, "
-                        f"starts_with_think: {starts_with_think}, valid_end: {valid_end},\n"
-                        f"format_score: {format_score}"
-                    )
-
                     format_scores.append(format_score)
                 if not format_scores:
                     return 0.0
