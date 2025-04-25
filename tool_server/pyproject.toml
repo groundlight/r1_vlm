@@ -1,0 +1,18 @@
+[project]
+name = "tool-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "clip",
+    "fastapi[standard]>=0.115.12",
+    "imgcat>=0.6.0",
+    "mobileclip",
+    "ultralytics>=8.3.112",
+    "uvicorn>=0.34.2",
+]
+
+[tool.uv.sources]
+mobileclip = { git = "https://github.com/THU-MIG/yoloe.git", subdirectory = "third_party/ml-mobileclip" }
+clip = { git = "https://github.com/ultralytics/CLIP.git" }
