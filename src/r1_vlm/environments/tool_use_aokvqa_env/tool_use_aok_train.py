@@ -7,7 +7,7 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
-from r1_vlm.environments.tool_use_aokvqa_env.regex import FINAL_OUTPUT_REGEX
+from r1_vlm.environments.tool_use_aokvqa_env.regex_for_aok import FINAL_OUTPUT_REGEX
 from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"

@@ -81,12 +81,11 @@ EITHER_TOOL_REGEX = f"(?:{ZOOM_TOOL_REGEX}|{DETECT_OBJECTS_TOOL_REGEX})"
 # --- Final Combined Regex ---
 
 # Matches the complete expected output structure:
-# ^ (Start)
 # EITHER_THINK_REGEX (Think section, full or partial)
 # \s* (Optional whitespace)
 # (?:EITHER_TOOL_REGEX | ANSWER_REGEX) (Either a valid tool call OR an answer section)
 # \s* (Optional whitespace)
-# $ (End)
+# Removed ^ and $ anchors as they are unsupported by the interegular parser used by outlines.
 FINAL_OUTPUT_REGEX = (
-    rf"^{EITHER_THINK_REGEX}\s*(?:{EITHER_TOOL_REGEX}|{ANSWER_REGEX})\s*$"
+    rf"{EITHER_THINK_REGEX}\s*(?:{EITHER_TOOL_REGEX}|{ANSWER_REGEX})\s*"
 )
