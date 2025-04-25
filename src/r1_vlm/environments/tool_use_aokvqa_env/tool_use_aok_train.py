@@ -7,6 +7,7 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
+from r1_vlm.environments.tool_use_aokvqa_env.regex import FINAL_OUTPUT_REGEX
 from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
@@ -91,8 +92,11 @@ def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
+    print("loaded model")
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
+
+    print("loaded env")
 
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
 
@@ -148,6 +152,7 @@ def train():
         train_dataset=train_dataset,
         env=vf_env,
         peft_config=peft_config,
+        guided_regex=FINAL_OUTPUT_REGEX,
     )
 
     trainer.train()
