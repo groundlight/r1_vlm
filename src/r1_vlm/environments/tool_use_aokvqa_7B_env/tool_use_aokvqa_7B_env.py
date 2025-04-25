@@ -97,11 +97,11 @@ class AOKVQAToolEnv(ToolVisionEnv):
         for reward_function in reward_functions:
             if reward_function.__name__ == "format_reward_func":
                 # consistent small reward for formatting properly
-                schedule = 0.2
+                schedule = 1.0
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # having proper formatting will be rewarded more heavily to start, and taper off
-                schedule = 0.5
+                schedule = 1.0
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
@@ -120,7 +120,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
     def get_rubric(self) -> list[RewardFunc]:
         def format_reward_func(prompts, completions, completions_messages, **kwargs):
-            """Soft reward function that checks if each step follows the expected format."""
+            """Soft reward function that checks if each step follows the expected format.
+            Expected format: <think>...</think> followed by either <tool>...</tool> or <answer>...</answer>"""
 
             def check_format(trajectory):
                 model_messages = [
@@ -132,67 +133,87 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 for msg in model_messages:
                     content = msg["content"]
                     if isinstance(content, list):
-                        text_content = " ".join(
-                            part.get("text", "") for part in content
-                        )
+                        text_content = "".join(part.get("text", "") for part in content)
                     else:
                         text_content = content
                     parsed = self.parse(text_content)
                     parsed_no_strip = self.parse(text_content, strip=False)
 
-                    has_any_field = False
-                    total_fields = 0
-                    expected_field_count = len(self._fields)
-                    present_field_sets = set()
+                    # Check specific field presence
+                    has_think = (
+                        hasattr(parsed, "think")
+                        and getattr(parsed, "think") is not None
+                    )
+                    has_tool = (
+                        hasattr(parsed, "tool") and getattr(parsed, "tool") is not None
+                    )
+                    has_answer = (
+                        hasattr(parsed, "answer")
+                        and getattr(parsed, "answer") is not None
+                    )
+
+                    # Check correct spacing (no extra whitespace within tags)
+                    # This requires checking non-stripped parsing results for *present* fields
                     has_correct_spacing = True
+                    if has_think and not (
+                        hasattr(parsed_no_strip, "think")
+                        and getattr(parsed_no_strip, "think") is not None
+                    ):
+                        has_correct_spacing = False
+                    if has_tool and not (
+                        hasattr(parsed_no_strip, "tool")
+                        and getattr(parsed_no_strip, "tool") is not None
+                    ):
+                        has_correct_spacing = False
+                    if has_answer and not (
+                        hasattr(parsed_no_strip, "answer")
+                        and getattr(parsed_no_strip, "answer") is not None
+                    ):
+                        has_correct_spacing = False
 
-                    for i, (canonical, alternatives) in enumerate(self._fields):
-                        field_set_present = False
-                        for alt in alternatives:
-                            if (
-                                hasattr(parsed, alt)
-                                and getattr(parsed, alt) is not None
-                            ):
-                                has_any_field = True
-                                total_fields += 1
-                                field_set_present = True
-                                if not (
-                                    hasattr(parsed_no_strip, alt)
-                                    and getattr(parsed_no_strip, alt) is not None
-                                ):
-                                    has_correct_spacing = False
-                            elif (
-                                text_content.count(f"<{alt}>") > 0
-                                or text_content.count(f"</{alt}>") > 0
-                            ):
-                                total_fields += 1
-                                field_set_present = True
-                        if field_set_present:
-                            present_field_sets.add(i)
+                    # Check structural validity: think + (tool XOR answer)
+                    is_valid_structure = has_think and (
+                        (has_tool and not has_answer) or (not has_tool and has_answer)
+                    )
 
+                    # Check start and end tags based on expected structure
+                    text_stripped = text_content.strip()
+                    starts_with_think = text_stripped.startswith("<think>")
+                    ends_with_tool = text_stripped.endswith("</tool>")
+                    ends_with_answer = text_stripped.endswith("</answer>")
+
+                    # Valid end requires ending with the tag that is present (tool or answer)
+                    valid_end = (has_tool and ends_with_tool) or (
+                        has_answer and ends_with_answer
+                    )
+
+                    # Calculate score
                     format_score = 0.0
-                    starts_with_any_field = any(
-                        text_content.strip().startswith(f"<{alt}>")
-                        for alt in self._fields[0][1]
-                    )
-                    ends_with_any_field = any(
-                        text_content.strip().endswith(f"</{alt}>")
-                        for alt in self._fields[-1][1]
-                    )
-
-                    if has_any_field:
-                        field_set_ratio = len(present_field_sets) / expected_field_count
-                        format_score += 0.4 * field_set_ratio
+                    if is_valid_structure:
+                        format_score += 0.4  # Core structure reward
                     if has_correct_spacing:
                         format_score += 0.2
-                    if starts_with_any_field:
+                    if (
+                        starts_with_think
+                    ):  # Should always start with think if structure is valid
                         format_score += 0.2
-                    if ends_with_any_field:
+                    if valid_end:  # Should end with tool/answer if structure is valid
                         format_score += 0.2
+
+                    # Debug print (optional, can be removed)
+                    print(
+                        f"text_content: {text_content},\n"
+                        f"has_think: {has_think}, has_tool: {has_tool}, has_answer: {has_answer}, "
+                        f"is_valid_structure: {is_valid_structure},\n"
+                        f"has_correct_spacing: {has_correct_spacing}, "
+                        f"starts_with_think: {starts_with_think}, valid_end: {valid_end},\n"
+                        f"format_score: {format_score}"
+                    )
 
                     format_scores.append(format_score)
                 if not format_scores:
                     return 0.0
+                # Return the average score over all assistant messages in the trajectory
                 return sum(format_scores) / len(format_scores)
 
             preprocessed_data = AOKVQAToolEnv.preprocess_for_reward(
@@ -207,6 +228,28 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
             return [check_format(m) for m in merged_completion_conversations]
 
+        def check_execution(conversation):
+            """
+            Returns the ratio of successful tool executions to total attempts.
+            """
+            tool_attempts = 0
+            successful_executions = 0
+
+            for i, message in enumerate(conversation):
+                if message["role"] == "assistant":
+                    parsed = self.llm_parser.parse(message["content"][0]["text"])
+                    if hasattr(parsed, "tool") and parsed.tool is not None:
+                        tool_attempts += 1
+                        if (
+                            i + 1 < len(conversation)
+                            and conversation[i + 1]["role"] == "user"
+                        ):
+                            response = conversation[i + 1]["content"][0]["text"]
+                            if "Error:" not in response:
+                                successful_executions += 1
+
+            return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
+
         def tool_execution_reward_func(
             prompts, completions, completions_messages, **kwargs
         ) -> list[float]:
@@ -217,27 +260,6 @@ class AOKVQAToolEnv(ToolVisionEnv):
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )
-
-            def check_execution(conversation):
-                tool_attempts = 0
-                successful_executions = 0
-
-                for i, message in enumerate(conversation):
-                    if message["role"] == "assistant":
-                        parsed = self.llm_parser.parse(message["content"][0]["text"])
-                        if hasattr(parsed, "tool") and parsed.tool is not None:
-                            tool_attempts += 1
-                            if (
-                                i + 1 < len(conversation)
-                                and conversation[i + 1]["role"] == "user"
-                            ):
-                                response = conversation[i + 1]["content"][0]["text"]
-                                if "Error:" not in response:
-                                    successful_executions += 1
-
-                return (
-                    0.0 if tool_attempts == 0 else successful_executions / tool_attempts
-                )
 
             rewards = [
                 check_execution(conv) for conv in merged_completion_conversations
@@ -268,11 +290,6 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 else:
                     answers.append(None)
 
-            # strip whitespace from answers
-            for answer in answers:
-                if isinstance(answer, str):
-                    answer = answer.strip()
-
             correct_answers = kwargs["multiple_choice_answer"]
 
             if len(correct_answers) != len(answers):
@@ -280,10 +297,22 @@ class AOKVQAToolEnv(ToolVisionEnv):
                     f"The number of correct answers ({len(correct_answers)}) does not match the number of answers ({len(answers)})"
                 )
 
+            # boolean array that is True IFF the model executed every tool call correctly
+            # In the case where the model did not attempt any tool calls, this will be False
+            tool_executions = [
+                check_execution(conv) == 1.0 for conv in merged_completion_conversations
+            ]
+
             rewards = []
-            for answer, correct_answer in zip(answers, correct_answers):
-                if answer == correct_answer:
-                    rewards.append(1.0)
+            for answer, correct_answer, tool_execution in zip(
+                answers, correct_answers, tool_executions
+            ):
+                # gate the correctness reward on the model using tools properly
+                if tool_execution:
+                    if answer == correct_answer:
+                        rewards.append(1.0)
+                    else:
+                        rewards.append(0.0)
                 else:
                     rewards.append(0.0)
 
