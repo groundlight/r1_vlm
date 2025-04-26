@@ -43,6 +43,10 @@ def infer_schema_from_function(func: Callable) -> Dict[str, Any]:
     # Build args schema
     args = {}
     for name, param in sig.parameters.items():
+        # Skip kwargs parameter
+        if name == "kwargs":
+            continue
+
         param_doc = ""
         for part in doc_parts:
             if part.strip().startswith("Args:"):

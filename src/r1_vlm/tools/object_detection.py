@@ -42,7 +42,6 @@ def detect_objects(
         image_name: input_image
         classes: ["car", "person"]
         </tool>
-
         <tool>
         name: detect_objects
         image_name: input_image
@@ -166,7 +165,14 @@ def parse_detect_objects_args(raw_args: RawToolArgs) -> TypedToolArgs:
             f"Error: Missing required arguments for detect_objects tool: {', '.join(sorted(missing_keys))}"
         )
 
-    # 2. Perform Basic Type Conversions
+    # 2. Check for extra keys
+    extra_keys = actual_keys - required_keys
+    if extra_keys:
+        raise ValueError(
+            f"Error: Unexpected arguments for detect_objects tool: {', '.join(sorted(extra_keys))}"
+        )
+
+    # 3. Perform Basic Type Conversions
     typed_args: TypedToolArgs = {}
     try:
         # Keep image_name as string

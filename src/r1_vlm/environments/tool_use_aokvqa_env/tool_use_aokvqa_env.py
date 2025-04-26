@@ -316,3 +316,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
             tool_execution_reward_func,
             correct_answer_reward_func,
         ]
+
+
+if __name__ == "__main__":
+    env = AOKVQAToolEnv(processing_class=None)
+    print(env.formatted_prompt)

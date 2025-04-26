@@ -106,7 +106,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-tool-use-aokvqa-env-reduced-beta-single-tool",
+        output_dir="vlm-r1-tool-use-aokvqa-env-better-tool-format",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         adam_beta2=0.98,
