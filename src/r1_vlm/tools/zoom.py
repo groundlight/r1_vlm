@@ -1,6 +1,10 @@
 # generic zoom tool
+import json
+
 import pytest
 from PIL import Image
+
+from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
 
 def zoom(
@@ -24,8 +28,19 @@ def zoom(
         The original image, zoomed into the region specified by the bounding box.
 
     Examples:
-        <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [250, 100, 300, 150], "magnification": 1.0}}</tool>
-        <tool>{"name": "zoom", "args": {"image_name": "input_image", "bbox": [130, 463, 224, 556], "magnification": 2.4}}</tool>
+        <tool>
+        name: zoom
+        image_name: input_image
+        bbox: [250, 100, 300, 150]
+        magnification: 1.0
+        </tool>
+
+        <tool>
+        name: zoom
+        image_name: input_image
+        bbox: [130, 463, 224, 556]
+        magnification: 2.4
+        </tool>
     """
     # get and validate the image
     images = kwargs["images"]
@@ -110,6 +125,64 @@ def zoom(
     print(f"Zoom tool output image size: {output_image.size}")
 
     return output_image
+
+
+def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
+    """
+    Parses raw string arguments for the zoom tool, focusing on type conversion.
+
+    Expects keys: 'name', 'image_name', 'bbox', 'magnification'.
+    Converts 'bbox' from a JSON string to a list and 'magnification' to a float.
+    Detailed validation of values (e.g., bbox contents, magnification range)
+    is deferred to the zoom function itself.
+
+    Args:
+        raw_args: Dictionary with string keys and string values from the general parser.
+
+    Returns:
+        A dictionary containing the arguments with basic type conversions applied,
+        ready for the zoom function. Keys: 'image_name', 'bbox', 'magnification'.
+
+    Raises:
+        ValueError: If required keys are missing or basic type conversion fails
+                    (e.g., 'bbox' is not valid JSON, 'magnification' is not a number).
+    """
+    required_keys = {"name", "image_name", "bbox", "magnification"}
+    actual_keys = set(raw_args.keys())
+
+    # 1. Check for Missing Keys (Essential for parsing)
+    missing_keys = required_keys - actual_keys
+    if missing_keys:
+        raise ValueError(
+            f"Missing required arguments for zoom tool: {', '.join(sorted(missing_keys))}"
+        )
+
+    # 2. Perform Basic Type Conversions
+    typed_args: TypedToolArgs = {}
+    try:
+        # Keep image_name as string
+        typed_args["image_name"] = raw_args["image_name"]
+
+        # Convert bbox string using json.loads
+        typed_args["bbox"] = json.loads(raw_args["bbox"])
+
+        # Convert magnification string to float
+        typed_args["magnification"] = float(raw_args["magnification"])
+
+    except json.JSONDecodeError:
+        raise ValueError(f"Error: Invalid JSON format for 'bbox': '{raw_args['bbox']}'")
+    except ValueError:
+        # Catches float conversion error
+        raise ValueError(
+            f"Error: Invalid number format for 'magnification': '{raw_args['magnification']}'"
+        )
+    except KeyError as e:
+        # This should ideally be caught by the missing keys check above, but as a safeguard:
+        raise ValueError(f"Error: Missing key '{e}' during conversion phase.")
+
+    # 3. Return dictionary with attempted type conversions
+    # The zoom function will validate if bbox is List[int] of length 4, if magnification >= 1.0, etc.
+    return typed_args
 
 
 @pytest.fixture

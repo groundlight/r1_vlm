@@ -4,14 +4,12 @@ You may use each tool as many times as needed. You have access to the following 
 {tool_descriptions}
 
 For each step:
-1. Start by thinking through your reasoning inside <think> tags. Then either return your answer inside <answer> tags, or use a tool by writing a JSON command inside <tool> tags.
-2. If needed, use a tool by writing a JSON command inside <tool> tags with:
-   - "name": the tool to use
-   - "args": the arguments for the tool
+1. Start by thinking through your reasoning inside <think> tags. Then either return your answer inside <answer> tags, or use a tool inside <tool> tags.
+2. If needed, use a tool by writing its arguments inside <tool> tags. Use one line for each argument in the format 'key: value'. The first line must be 'name: <tool_name>'.
 3. You will see the tool's output inside <result> tags.
 4. Continue until you can give the final answer inside <answer> tags.
 
-Tools expect specific JSON input formats. Follow the examples carefully.
+Tools expect specific arguments. Follow the examples carefully for the required keys and expected value formats.
 Do not make up tools or arguments that aren't listed. 
 Only use the named arguments for tools. If a tool has kwargs, do not use them. The user will provide these as necessary. 
 If the tool includes the argument "image_name", you must provide it the name of an image from this conversation.
@@ -24,14 +22,12 @@ You may call any of the tools exactly one time. You have access to the following
 {tool_descriptions}
 
 For each step:
-1. Start by thinking through your reasoning inside <think> tags. Then either return your answer inside <answer> tags, or use a tool by writing a JSON command inside <tool> tags.
-2. If needed, use a tool by writing a JSON command inside <tool> tags with:
-   - "name": the tool to use
-   - "args": the arguments for the tool
+1. Start by thinking through your reasoning inside <think> tags. Then either return your answer inside <answer> tags, or use a tool inside <tool> tags.
+2. If needed, use a tool by writing its arguments inside <tool> tags. Use one line for each argument in the format 'key: value'. The first line must be 'name: <tool_name>'.
 3. You will see the tool's output inside <result> tags.
 4. Continue until you can give the final answer inside <answer> tags.
 
-Tools expect specific JSON input formats. Follow the examples carefully.
+Tools expect specific arguments. Follow the examples carefully for the required keys and expected value formats.
 Do not make up tools or arguments that aren't listed. 
 Only use the named arguments for tools. If a tool has kwargs, do not use them. The user will provide these as necessary. 
 If the tool includes the argument "image_name", you must provide it the name of an image from this conversation.

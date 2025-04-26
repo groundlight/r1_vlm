@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import os
 
 # Add imports for numpy and cv2
@@ -10,6 +11,8 @@ import requests
 from dotenv import load_dotenv
 from imgcat import imgcat
 from PIL import Image
+
+from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
 load_dotenv()
 
@@ -31,12 +34,20 @@ def detect_objects(
         1. A list of dictionaries, each containing the following keys:
             - "bbox_2d": list[int], the bounding box of the object in the format of [x_min, y_min, x_max, y_max] in pixel coordinates
             - "label": str, the label of the object
-            - "confidence": float, the confidence score of the detection
         2. The original image with the detections overlaid on it.
 
     Examples:
-        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person"]}}</tool>
-        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["elephant", "white jeep"]}}</tool>
+        <tool>
+        name: detect_objects
+        image_name: input_image
+        classes: ["car", "person"]
+        </tool>
+
+        <tool>
+        name: detect_objects
+        image_name: input_image
+        classes: ["elephant", "white jeep"]
+        </tool>
     """
 
     images = kwargs["images"]
@@ -54,8 +65,8 @@ def detect_objects(
         )
 
     # construct the API request
-    # I decided to fix the confidence threshold at 0.15, as the model tends to set this value very high, which leads to a lot of false negatives
-    url = f"http://{API_IP}:{API_PORT}/detect?confidence={0.15}"
+    # I decided to fix the confidence threshold at 0.10, as the model tends to set this value very high, which leads to a lot of false negatives
+    url = f"http://{API_IP}:{API_PORT}/detect?confidence={0.10}"
 
     # Convert PIL Image to bytes
     img_byte_arr = io.BytesIO()
@@ -85,7 +96,6 @@ def detect_objects(
             {
                 "bbox_2d": detection["bbox_2d"],
                 "label": detection["label"],
-                "confidence": round(detection["confidence"], 2),
             }
         )
 
@@ -124,6 +134,67 @@ def detect_objects(
     annotated_image = Image.fromarray(annotated_image_np_rgb)
 
     return {"text_data": dets_string, "image_data": annotated_image}
+
+
+def parse_detect_objects_args(raw_args: RawToolArgs) -> TypedToolArgs:
+    """
+    Parses raw string arguments for the detect_objects tool, focusing on type conversion.
+
+    Expects keys: 'name', 'image_name', 'classes'.
+    Converts 'classes' from a JSON string representing a list of strings.
+    Detailed validation of values (e.g., 'image_name' validity, 'classes' content)
+    is deferred to the detect_objects function itself.
+
+    Args:
+        raw_args: Dictionary with string keys and string values from the general parser.
+
+    Returns:
+        A dictionary containing the arguments with basic type conversions applied,
+        ready for the detect_objects function. Keys: 'image_name', 'classes'.
+
+    Raises:
+        ValueError: If required keys are missing or basic type conversion fails
+                    (e.g., 'classes' is not valid JSON).
+    """
+    required_keys = {"name", "image_name", "classes"}
+    actual_keys = set(raw_args.keys())
+
+    # 1. Check for Missing Keys
+    missing_keys = required_keys - actual_keys
+    if missing_keys:
+        raise ValueError(
+            f"Error: Missing required arguments for detect_objects tool: {', '.join(sorted(missing_keys))}"
+        )
+
+    # 2. Perform Basic Type Conversions
+    typed_args: TypedToolArgs = {}
+    try:
+        # Keep image_name as string
+        typed_args["image_name"] = raw_args["image_name"]
+
+        # Convert classes string using json.loads
+        classes_list = json.loads(raw_args["classes"])
+
+        # Basic type check - ensure it's a list, defer content check (list of strings) to tool
+        if not isinstance(classes_list, list):
+            raise ValueError(
+                f"Error: Invalid format for 'classes': Expected a JSON list, got type {type(classes_list).__name__}"
+            )
+
+        typed_args["classes"] = classes_list
+
+    except json.JSONDecodeError:
+        raise ValueError(
+            f"Error: Invalid JSON format for 'classes': '{raw_args['classes']}'"
+        )
+    except ValueError as e:
+        # Catch the list type error from above
+        raise ValueError(f"Error: processing 'classes': {e}")
+    except KeyError as e:
+        # Safeguard for missing keys during access
+        raise ValueError(f"Error: Missing key '{e}' during conversion phase.")
+
+    return typed_args
 
 
 @pytest.fixture
