@@ -348,22 +348,36 @@ class ToolVisionEnv(MultistepVisionEnv):
                     and "text_data" in result
                     and "image_data" in result
                 ):
-                    response = {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>",
-                            },
-                            {"type": "image", "image": result["image_data"]},
-                            {
-                                "type": "text",
-                                "text": self.env_parser.format(
-                                    result=result["text_data"]
-                                ),
-                            },
-                        ],
-                    }
+                    text_data = result["text_data"]
+                    image_data = result["image_data"]
+
+                    if image_data is None:
+                        response = {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": self.env_parser.format(result=text_data),
+                                }
+                            ],
+                        }
+                    else:
+                        response = {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>",
+                                },
+                                {"type": "image", "image": result["image_data"]},
+                                {
+                                    "type": "text",
+                                    "text": self.env_parser.format(
+                                        result=result["text_data"]
+                                    ),
+                                },
+                            ],
+                        }
                 else:
                     response = {
                         "role": "user",

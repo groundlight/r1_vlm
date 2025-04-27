@@ -41,12 +41,12 @@ def detect_objects(
         <tool>
         name: detect_objects
         image_name: input_image
-        classes: ["car", "person"]
+        classes: ["car", "person", "train", "bus"]
         </tool>
         <tool>
         name: detect_objects
         image_name: input_image
-        classes: ["elephant", "white jeep"]
+        classes: ["elephant", "white jeep", "tree", "water"]
         </tool>
     """
 
@@ -104,6 +104,7 @@ def detect_objects(
 
     if len(dets) == 0:
         dets_string = "No objects detected."
+        annotated_image = None
     else:
         dets_string = ""
         for index, det in enumerate(dets):
@@ -112,14 +113,14 @@ def detect_objects(
             if index < len(dets) - 1:
                 dets_string += "\n"
 
-    # convert the annotated image(base64 encoded) to a PIL Image
-    annotated_image_data = base64.b64decode(result["annotated_image"])
-    annotated_image_pil = Image.open(io.BytesIO(annotated_image_data))
+        # convert the annotated image(base64 encoded) to a PIL Image only if detections exist
+        annotated_image_data = base64.b64decode(result["annotated_image"])
+        annotated_image_pil = Image.open(io.BytesIO(annotated_image_data))
 
-    # Convert PIL Image to NumPy array (OpenCV format)
-    # PIL images with mode 'RGB' are loaded as NumPy arrays with shape (H, W, 3) in RGB order.
-    # PIL images with mode 'RGBA' are loaded as NumPy arrays with shape (H, W, 4) in RGBA order.
-    annotated_image_np = np.array(annotated_image_pil)
+        # Convert PIL Image to NumPy array (OpenCV format)
+        # PIL images with mode 'RGB' are loaded as NumPy arrays with shape (H, W, 3) in RGB order.
+        # PIL images with mode 'RGBA' are loaded as NumPy arrays with shape (H, W, 4) in RGBA order.
+        annotated_image_np = np.array(annotated_image_pil)
 
     # Convert BGR(A) to RGB(A) using OpenCV if it's a color image
     # Assuming the source API sent BGR/BGRA data, which np.array converted retaining channel order relative to PIL's interpretation.
@@ -133,9 +134,10 @@ def detect_objects(
         # Grayscale or other formats, no conversion needed
         annotated_image_np_rgb = annotated_image_np
 
-    # Convert NumPy array back to PIL Image
-    annotated_image = Image.fromarray(annotated_image_np_rgb)
+        # Convert NumPy array back to PIL Image
+        annotated_image = Image.fromarray(annotated_image_np_rgb)
 
+    # Return None for image_data if no detections were found
     return {"text_data": dets_string, "image_data": annotated_image}
 
 
