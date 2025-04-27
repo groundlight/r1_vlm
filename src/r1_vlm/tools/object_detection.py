@@ -122,17 +122,21 @@ def detect_objects(
         # PIL images with mode 'RGBA' are loaded as NumPy arrays with shape (H, W, 4) in RGBA order.
         annotated_image_np = np.array(annotated_image_pil)
 
-    # Convert BGR(A) to RGB(A) using OpenCV if it's a color image
-    # Assuming the source API sent BGR/BGRA data, which np.array converted retaining channel order relative to PIL's interpretation.
-    # If PIL interpreted as RGB, the np array is RGB. If RGBA, the np array is RGBA.
-    # Since the *source* was BGR/BGRA, we convert the numpy array from BGR/BGRA to RGB/RGBA.
-    if annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 3:  # RGB/BGR
-        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGR2RGB)
-    elif annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 4:  # RGBA/BGRA
-        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGRA2RGBA)
-    else:
-        # Grayscale or other formats, no conversion needed
-        annotated_image_np_rgb = annotated_image_np
+        # Convert BGR(A) to RGB(A) using OpenCV if it's a color image
+        # Assuming the source API sent BGR/BGRA data, which np.array converted retaining channel order relative to PIL's interpretation.
+        # If PIL interpreted as RGB, the np array is RGB. If RGBA, the np array is RGBA.
+        # Since the *source* was BGR/BGRA, we convert the numpy array from BGR/BGRA to RGB/RGBA.
+        if annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 3:  # RGB/BGR
+            annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGR2RGB)
+        elif (
+            annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 4
+        ):  # RGBA/BGRA
+            annotated_image_np_rgb = cv2.cvtColor(
+                annotated_image_np, cv2.COLOR_BGRA2RGBA
+            )
+        else:
+            # Grayscale or other formats, no conversion needed
+            annotated_image_np_rgb = annotated_image_np
 
         # Convert NumPy array back to PIL Image
         annotated_image = Image.fromarray(annotated_image_np_rgb)
