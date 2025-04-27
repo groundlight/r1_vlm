@@ -143,6 +143,8 @@ def train():
         epsilon_high=0.28,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
+        # clip gradients to avoid exploding gradients
+        max_grad_norm=1.0,
     )
 
     trainer = QwenGRPOTrainer(

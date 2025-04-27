@@ -15,7 +15,8 @@ def zoom(
     """
     Returns the original image, cropped into the region specified by the bounding box,
     and then resized by a fixed factor of 2.5x, subject to minimum and maximum size constraints.
-    This tool is useful to see a portion of an image in more detail. Generally, avoid selecting a region that is too small.
+    This tool is useful to see a portion of an image in more detail. This is useful to see the region of interest with higher clarity,
+    like for reading text or identifying objects. Generally, avoid selecting a region that is too small.
     Ideally, aim for a region that is at least 100 x 100 pixels. Your crop should be close to square for best results.
 
     Args:
