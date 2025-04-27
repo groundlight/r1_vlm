@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import os
+import time  # Import the time module
 
 # Add imports for numpy and cv2
 import cv2
@@ -78,7 +79,10 @@ def detect_objects(
         data.setdefault("classes", []).append(c)
 
     # send the request
+    start_time = time.time()  # Record start time
     response = requests.post(url, files=files, data=data)
+    end_time = time.time()  # Record end time
+    print(f"API call took {end_time - start_time:.2f} seconds")  # Print duration
 
     if response.status_code == 200:
         result = response.json()
