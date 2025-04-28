@@ -112,6 +112,9 @@ def main():
 
         options_set = example["choices"]
 
+        if model_answer in options_set:
+            in_option_set += 1
+
         total += 1
         if model_answer == gt_answer:
             correct += 1
