@@ -31,12 +31,12 @@ def zoom(
         <tool>
         name: zoom
         image_name: input_image
-        bbox: [250, 100, 300, 150]
+        bbox: [250, 100, 350, 300]
         </tool>
         <tool>
         name: zoom
         image_name: input_image
-        bbox: [130, 463, 224, 556]
+        bbox: [130, 276, 323, 552]
         </tool>
     """
     # get and validate the image
