@@ -11,7 +11,7 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
-from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
 
@@ -25,7 +25,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
-        tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
     ):
         super().__init__(
             processing_class=processing_class,
@@ -222,8 +222,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
         def check_execution(conversation):
             """
-            Returns the ratio of successful tool executions to total attempts. If no tool calls are made, returns 1.0 to indicate that the model did not fail.
-            I'm hoping this teaches the model to use tools when they are actually needed instead of all the time.
+            Returns the ratio of successful tool executions to total attempts.
             """
             tool_attempts = 0
             successful_executions = 0
@@ -241,7 +240,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
                             if "Error:" not in response:
                                 successful_executions += 1
 
-            return 1.0 if tool_attempts == 0 else successful_executions / tool_attempts
+            return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
 
         def tool_execution_reward_func(
             prompts, completions, completions_messages, **kwargs
@@ -249,14 +248,36 @@ class AOKVQAToolEnv(ToolVisionEnv):
             """
             Reward function that checks if tools were executed successfully.
             Returns a reward based on the ratio of successful tool executions to total attempts.
+
+            Gates on the model answering the question correctly.
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )
 
-            rewards = [
-                check_execution(conv) for conv in merged_completion_conversations
+            correct_tool_executions: list[bool] = [
+                check_execution(conv) == 1.0 for conv in merged_completion_conversations
             ]
+
+            correct_answers = kwargs["multiple_choice_answer"]
+
+            correctness_results: list[bool] = [
+                check_correctness(conv, correct_answer)
+                for conv, correct_answer in zip(
+                    merged_completion_conversations, correct_answers
+                )
+            ]
+
+            rewards = []
+
+            for correct_tool_execution, correctness_result in zip(
+                correct_tool_executions, correctness_results
+            ):
+                if correct_tool_execution and correctness_result:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
+
             return rewards
 
         def check_correctness(conversation, correct_answer):

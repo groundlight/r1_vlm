@@ -63,7 +63,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> I'll collect as much visual evidence as possible from the image, and then consider all four possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world. First, I'll consider if zooming in will help me answer the question and if so, what region of the image to zoom in on.",
+                    "text": "\n<think> I'll collect as much visual evidence as possible from the image. First, I'll consider what region of the image to zoom in on to get the most information. Then, I'll review and consider the four possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world.",
                 }
             ],
         },
