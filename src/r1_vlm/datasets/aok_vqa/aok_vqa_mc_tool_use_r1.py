@@ -28,7 +28,7 @@ def generate_r1_messages(example):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    choices_str = "Possible answers: "
+    choices_str = "These are the possible answers, you must choose one: "
     for i, choice in enumerate(choices):
         if i == len(choices) - 1:
             choices_str += f"or {choice}."
