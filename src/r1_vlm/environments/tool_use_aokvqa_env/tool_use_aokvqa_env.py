@@ -248,39 +248,18 @@ class AOKVQAToolEnv(ToolVisionEnv):
             """
             Reward function that checks if tools were executed successfully.
             Returns a reward based on the ratio of successful tool executions to total attempts.
-
-            Gates on the model answering the question correctly.
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )
 
-            correct_tool_executions: list[bool] = [
-                check_execution(conv) == 1.0 for conv in merged_completion_conversations
+            rewards: list[float] = [
+                check_execution(conv) for conv in merged_completion_conversations
             ]
-
-            correct_answers = kwargs["multiple_choice_answer"]
-
-            correctness_results: list[bool] = [
-                check_correctness(conv, correct_answer)
-                for conv, correct_answer in zip(
-                    merged_completion_conversations, correct_answers
-                )
-            ]
-
-            rewards = []
-
-            for correct_tool_execution, correctness_result in zip(
-                correct_tool_executions, correctness_results
-            ):
-                if correct_tool_execution and correctness_result:
-                    rewards.append(1.0)
-                else:
-                    rewards.append(0.0)
 
             return rewards
 
-        def check_correctness(conversation, correct_answer):
+        def check_correctness(conversation, correct_answer) -> bool:
             text = conversation[-1]["content"][0]["text"]
 
             parsed = self.parser.parse(text)
@@ -310,22 +289,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 )
             ]
 
-            # check if the model used tools correctly
-            tool_executions: list[bool] = [
-                check_execution(conv) == 1.0 for conv in merged_completion_conversations
-            ]
-
-            rewards = []
-            # gate the correctness reward on the model using tools properly
-            for correctness_result, tool_execution in zip(
-                correctness_results, tool_executions
-            ):
-                if tool_execution and correctness_result:
-                    rewards.append(1.0)
-                else:
-                    rewards.append(0.0)
-
-            return rewards
+            return [1.0 if result else 0.0 for result in correctness_results]
 
         return [
             format_reward_func,
