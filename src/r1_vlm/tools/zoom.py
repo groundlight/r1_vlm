@@ -1,5 +1,6 @@
 # generic zoom tool
 import json
+from typing import List, Tuple
 
 import pytest
 from PIL import Image
@@ -7,36 +8,128 @@ from PIL import Image
 from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
 
+def calculate_crop_coordinates(
+    keypoint: List[int], image_size: Tuple[int, int], target_size: int = 300
+) -> Tuple[int, int, int, int]:
+    """
+    Calculates the crop coordinates for a square box centered around a keypoint.
+
+    If the target box extends beyond the image boundaries, the box is shifted
+    to stay within the image, maintaining the target size. The keypoint will
+    no longer be centered in this case.
+
+    The returned coordinates are suitable for use with PIL's Image.crop method,
+    following the (left, upper, right, lower) format where 'right' and 'lower'
+    are exclusive.
+
+    Args:
+        keypoint: A list or tuple [x, y] representing the desired center coordinates.
+        image_size: A tuple (width, height) of the original image.
+        target_size: The desired width and height of the square crop box.
+
+    Returns:
+        A tuple (crop_left, crop_upper, crop_right, crop_lower) defining the
+        region to crop from the original image.
+
+    Raises:
+        ValueError: If the keypoint is outside the image boundaries or inputs
+                    are invalid types/formats.
+    """
+    # --- Input Validation ---
+    if (
+        not isinstance(keypoint, (list, tuple))
+        or len(keypoint) != 2
+        or not all(isinstance(coord, int) for coord in keypoint)
+    ):
+        raise ValueError(
+            "Error:keypoint must be a list or tuple of two integers [x, y]"
+        )
+
+    if (
+        not isinstance(image_size, tuple)
+        or len(image_size) != 2
+        or not all(isinstance(dim, int) and dim > 0 for dim in image_size)
+    ):
+        raise ValueError(
+            "Error:image_size must be a tuple of two positive integers (width, height)"
+        )
+
+    if not isinstance(target_size, int) or target_size <= 0:
+        raise ValueError("Error: target_size must be a positive integer")
+
+    x, y = keypoint
+    width, height = image_size
+
+    if not (0 <= x < width and 0 <= y < height):
+        raise ValueError(
+            f"Error: keypoint [{x}, {y}] is outside the image boundaries "
+            f"(width={width}, height={height})"
+        )
+
+    # --- Calculate Crop Box ---
+    half_size = target_size // 2
+
+    # Calculate the ideal top-left corner to center the box
+    ideal_x_min = x - half_size
+    ideal_y_min = y - half_size
+
+    # Initialize the actual top-left corner
+    crop_left = ideal_x_min
+    crop_upper = ideal_y_min
+
+    # Adjust if the box extends beyond the right or bottom boundaries
+    if crop_left + target_size > width:
+        crop_left = width - target_size
+    if crop_upper + target_size > height:
+        crop_upper = height - target_size
+
+    # Adjust if the box extends beyond the left or top boundaries
+    if crop_left < 0:
+        crop_left = 0
+    if crop_upper < 0:
+        crop_upper = 0
+
+    # Calculate the final right and lower bounds for PIL crop (exclusive)
+    # Clamp the right/lower bounds to the image dimensions, important if
+    # target_size > image width/height.
+    crop_right = min(crop_left + target_size, width)
+    crop_lower = min(crop_upper + target_size, height)
+
+    # Ensure left/upper are also clamped in case target_size > image dimensions
+    # which might lead to negative values after boundary adjustments.
+    # The previous checks already handle this, but being explicit doesn't hurt.
+    crop_left = max(0, crop_left)
+    crop_upper = max(0, crop_upper)
+
+    return (crop_left, crop_upper, crop_right, crop_lower)
+
+
 def zoom(
     image_name: str,
-    bbox: list[int],
+    keypoint: list[int],
     **kwargs,
 ) -> Image.Image:
     """
-    Returns the original image, cropped into the region specified by the bounding box,
-    and then up-scaled by a fixed factor of 2.5x. This tool is useful to see a portion of an image in more detail.
-    This is useful to see the region of interest with higher clarity, like for reading text or identifying objects.
-    Generally, avoid selecting a region that is too small. Ideally, aim for a region that is at least 100 x 100 pixels.
-    Your crop should be close to square for best results.
+    Returns an image zoomed in on the specified keypoint.
+    This is useful to see a region of interest with higher clarity, like for reading text or identifying objects.
 
     Args:
-        image_name: str, the name of the image to zoom in on. Can only be called on the "input_image" image.
-        bbox: list[int], the bounding box to zoom in on. The bounding box is in the format of [x_min, y_min, x_max, y_max],
-            where (x_min, y_min) is the top-left corner and (x_max, y_max) is the bottom-right corner.
+        image_name: str, the name of the image to zoom in on. Can only be called on the "input_image".
+        keypoint: list[int], the [x, y] coordinates of the point to center the zoom on. Must be within the image boundaries.
 
     Returns:
-        The original image, zoomed into the region specified by the bounding box with a 2.5x scale factor applied.
+        The image zoomed in on the specified keypoint.
 
     Examples:
         <tool>
         name: zoom
         image_name: input_image
-        bbox: [250, 100, 350, 300]
+        keypoint: [500, 400]
         </tool>
         <tool>
         name: zoom
         image_name: input_image
-        bbox: [130, 276, 323, 552]
+        keypoint: [50, 40]
         </tool>
     """
     # get and validate the image
@@ -54,75 +147,22 @@ def zoom(
         )
 
     width, height = image.size
+    # size we will crop to
+    target_size = 300
 
-    # validate the bounding box:
-    # 1. It is a tuple of 4 integers where x_min < x_max and y_min < y_max
-    # 2. The coordinates are within the image size
-    if not isinstance(bbox, list) or len(bbox) != 4:
-        raise ValueError("Error: Invalid bbox: must be a list of 4 integers")
+    # size we will resize to
+    resize_size = 400
 
-    x_min, y_min, x_max, y_max = bbox
+    # Validate keypoint and calculate crop box using the helper function
+    # ValueError will be raised by the helper if keypoint is invalid
+    crop_box = calculate_crop_coordinates(keypoint, (width, height), target_size)
 
-    if (
-        not isinstance(x_min, int)
-        or not isinstance(y_min, int)
-        or not isinstance(x_max, int)
-        or not isinstance(y_max, int)
-    ):
-        raise ValueError("Error: Invalid bbox: must be a list of 4 integers")
+    # crop the image to the calculated box
+    cropped_image = image.crop(crop_box)
 
-    if x_min < 0 or x_min >= width or x_max < 0 or x_max > width:
-        raise ValueError(
-            f"Error: Invalid bbox: x_min and x_max must be within the image width. x_min: {x_min}, x_max: {x_max}, width: {width}"
-        )
-
-    if y_min < 0 or y_min >= height or y_max < 0 or y_max > height:
-        raise ValueError(
-            f"Error: Invalid bbox: y_min and y_max must be within the image height. y_min: {y_min}, y_max: {y_max}, height: {height}"
-        )
-
-    if x_min >= x_max or y_min >= y_max:
-        raise ValueError(
-            f"Error: Invalid bbox: x_min must be less than x_max and y_min must be less than y_max. x_min: {x_min}, x_max: {x_max}, y_min: {y_min}, y_max: {y_max}"
-        )
-
-    # crop the image to the bounding box
-    cropped_image = image.crop(bbox)
-
-    # Calculate target size with size constraints
-    MIN_SIZE = 50
-    MAX_SIZE = 400
-    FIXED_MAGNIFICATION = 2.5  # Hardcoded magnification factor
-
-    target_width = int((x_max - x_min) * FIXED_MAGNIFICATION)
-    target_height = int((y_max - y_min) * FIXED_MAGNIFICATION)
-
-    # Apply both constraints while maintaining aspect ratio
-    scale_min = max(
-        MIN_SIZE / target_width if target_width > 0 else 0,
-        MIN_SIZE / target_height if target_height > 0 else 0,
-    )  # Avoid division by zero
-    scale_max = min(
-        MAX_SIZE / target_width if target_width > 0 else float("inf"),
-        MAX_SIZE / target_height if target_height > 0 else float("inf"),
-    )  # Avoid division by zero
-    # scale = max(min(scale_max, 1.0), scale_min)  # Use the most constraining scale - Incorrect logic, should just clamp between min/max scale
-    scale = max(scale_min, min(scale_max, 1.0))  # Clamp the scale factor
-
-    target_width = int(target_width * scale)
-    target_height = int(target_height * scale)
-
-    # Validate aspect ratio - Ensure target dimensions are non-zero before division
-    if min(target_width, target_height) <= 0:
-        raise ValueError(
-            "Error: Calculated target dimensions are zero or negative after scaling."
-        )
-    aspect_ratio = max(target_width, target_height) / min(target_width, target_height)
-    if aspect_ratio > 200:
-        raise ValueError("Error: absolute aspect ratio must be smaller than 200")
-
+    # Resize the cropped image to the fixed target size
     output_image = cropped_image.resize(
-        (target_width, target_height), Image.Resampling.LANCZOS
+        (resize_size, resize_size), Image.Resampling.LANCZOS
     )
 
     print(f"Zoom tool output image size: {output_image.size}")
@@ -132,11 +172,11 @@ def zoom(
 
 def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
     """
-    Parses raw string arguments for the zoom tool, focusing on type conversion.
+    Parses raw string arguments for the zoom tool (keypoint version).
 
-    Expects keys: 'name', 'image_name', 'bbox'.
-    Converts 'bbox' from a JSON string to a list.
-    Detailed validation of values (e.g., bbox contents)
+    Expects keys: 'name', 'image_name', 'keypoint'.
+    Converts 'keypoint' from a JSON string to a list of integers.
+    Detailed validation of values (e.g., keypoint coordinates)
     is deferred to the zoom function itself.
 
     Args:
@@ -144,16 +184,17 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
 
     Returns:
         A dictionary containing the arguments with basic type conversions applied,
-        ready for the zoom function. Keys: 'image_name', 'bbox'.
+        ready for the zoom function. Keys: 'image_name', 'keypoint'.
 
     Raises:
-        ValueError: If required keys are missing or basic type conversion fails
-                    (e.g., 'bbox' is not valid JSON).
+        ValueError: If required keys are missing, extra keys are present,
+                    or basic type conversion fails (e.g., 'keypoint' is not valid JSON
+                    or doesn't result in a list of two integers).
     """
-    required_keys = {"name", "image_name", "bbox"}
+    required_keys = {"name", "image_name", "keypoint"}
     actual_keys = set(raw_args.keys())
 
-    # 1. Check for Missing Keys (Essential for parsing)
+    # 1. Check for Missing Keys
     missing_keys = required_keys - actual_keys
     if missing_keys:
         raise ValueError(
@@ -173,11 +214,27 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
         # Keep image_name as string
         typed_args["image_name"] = raw_args["image_name"]
 
-        # Convert bbox string to list of ints
-        typed_args["bbox"] = json.loads(raw_args["bbox"])
+        # Convert keypoint string to list of ints
+        keypoint_list = json.loads(raw_args["keypoint"])
+
+        # Basic validation of the parsed keypoint structure and type
+        if not isinstance(keypoint_list, list) or len(keypoint_list) != 2:
+            raise ValueError("Error: 'keypoint' must be a JSON list of two elements.")
+        if not all(isinstance(coord, int) for coord in keypoint_list):
+            raise ValueError(
+                "Error: Both elements in 'keypoint' list must be integers."
+            )
+
+        typed_args["keypoint"] = keypoint_list
 
     except json.JSONDecodeError:
-        raise ValueError(f"Error: Invalid JSON format for 'bbox': '{raw_args['bbox']}'")
+        raise ValueError(
+            f"Error: Invalid JSON format for 'keypoint': '{raw_args['keypoint']}'"
+        )
+    except (
+        ValueError
+    ) as e:  # Catch specific ValueErrors raised during keypoint validation
+        raise e
     except KeyError as e:
         # This should ideally be caught by the missing keys check above, but as a safeguard:
         raise ValueError(f"Error: Missing key '{e}' during conversion phase.")
@@ -187,183 +244,300 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
 
 @pytest.fixture
 def sample_image():
-    # Create a larger test image to allow testing MAX_SIZE
-    img = Image.new("RGB", (200, 200))  # Increased size to 200x200
+    # Create a larger test image
+    img = Image.new("RGB", (1000, 800))
     return {"input_image": img}
 
 
-def test_invalid_image_name(sample_image):
+# --- Tests for calculate_crop_coordinates (kept separate for clarity) ---
+def test_calc_centered(sample_image):
+    img_size = sample_image["input_image"].size
+    kp = [500, 400]
+    ts = 300
+    box = calculate_crop_coordinates(kp, img_size, ts)
+    assert box == (350, 250, 650, 550)
+
+
+def test_calc_top_left(sample_image):
+    img_size = sample_image["input_image"].size
+    kp = [50, 40]
+    ts = 300
+    box = calculate_crop_coordinates(kp, img_size, ts)
+    assert box == (0, 0, 300, 300)
+
+
+def test_calc_bottom_right(sample_image):
+    img_size = sample_image["input_image"].size
+    kp = [950, 750]
+    ts = 300
+    box = calculate_crop_coordinates(kp, img_size, ts)
+    assert box == (700, 500, 1000, 800)
+
+
+def test_calc_right_middle(sample_image):
+    img_size = sample_image["input_image"].size
+    kp = [950, 400]
+    ts = 300
+    box = calculate_crop_coordinates(kp, img_size, ts)
+    assert box == (700, 250, 1000, 550)
+
+
+def test_calc_small_image(sample_image):
+    small_img_size = (200, 150)
+    kp = [100, 75]
+    ts = 300
+    box = calculate_crop_coordinates(kp, small_img_size, ts)
+    assert box == (0, 0, 200, 150)
+
+
+def test_calc_invalid_keypoint_coords(sample_image):
+    img_size = sample_image["input_image"].size
+    ts = 300
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        calculate_crop_coordinates([1000, 400], img_size, ts)
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        calculate_crop_coordinates([-1, 400], img_size, ts)
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        calculate_crop_coordinates([500, 800], img_size, ts)
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        calculate_crop_coordinates([500, -1], img_size, ts)
+
+
+def test_calc_invalid_input_types():
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        calculate_crop_coordinates("[100, 100]", (500, 500), 300)
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        calculate_crop_coordinates([100], (500, 500), 300)
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        calculate_crop_coordinates([100.0, 100], (500, 500), 300)
+    with pytest.raises(ValueError, match="image_size must be a tuple"):
+        calculate_crop_coordinates([100, 100], [500, 500], 300)
+    with pytest.raises(ValueError, match="image_size must be a tuple"):
+        calculate_crop_coordinates([100, 100], (500, 0), 300)
+    with pytest.raises(ValueError, match="target_size must be a positive integer"):
+        calculate_crop_coordinates([100, 100], (500, 500), 0)
+    with pytest.raises(ValueError, match="target_size must be a positive integer"):
+        calculate_crop_coordinates([100, 100], (500, 500), -100)
+
+
+# --- Tests for zoom function ---
+
+
+def test_zoom_invalid_image_name(sample_image):
     with pytest.raises(ValueError, match="not found"):
-        zoom("nonexistent_image", [0, 0, 50, 50], images=sample_image)
+        zoom("nonexistent_image", [100, 100], images=sample_image)
 
 
 # Add test for incorrect image name usage (e.g., "test_image" instead of "input_image")
-def test_incorrect_image_name_usage(sample_image):
+def test_zoom_incorrect_image_name_usage(sample_image):
     with pytest.raises(ValueError, match="is not the input_image"):
         zoom(
             "test_image",
-            [0, 0, 50, 50],
+            [100, 100],
             images={"test_image": sample_image["input_image"]},
         )
 
 
-def test_invalid_bbox_length(sample_image):
-    with pytest.raises(ValueError, match="must be a list of 4 integers"):
-        zoom("input_image", [0, 0, 50], images=sample_image)
+# Test invalid keypoint format passed directly (should be caught by calculate_crop_coordinates)
+def test_zoom_invalid_keypoint_format(sample_image):
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        zoom(
+            "input_image", "[100, 100]", images=sample_image
+        )  # Pass string instead of list
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        zoom("input_image", [100], images=sample_image)  # Pass list with 1 element
+    with pytest.raises(ValueError, match="keypoint must be a list or tuple"):
+        zoom("input_image", [100.0, 100], images=sample_image)  # Pass float
 
 
-def test_invalid_bbox_value_types(sample_image):
-    with pytest.raises(ValueError, match="must be a list of 4 integers"):
-        zoom("input_image", [0.5, 0, 50, 50], images=sample_image)
+# Test keypoint outside image bounds (should be caught by calculate_crop_coordinates)
+def test_zoom_keypoint_out_of_bounds(sample_image):
+    img_size = sample_image["input_image"].size
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        zoom("input_image", [img_size[0], 100], images=sample_image)  # x = width
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        zoom("input_image", [-1, 100], images=sample_image)  # x < 0
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        zoom("input_image", [100, img_size[1]], images=sample_image)  # y = height
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        zoom("input_image", [100, -1], images=sample_image)  # y < 0
 
 
-def test_bbox_coordinates_reversed(sample_image):
-    with pytest.raises(ValueError, match="x_min must be less than x_max"):
-        zoom("input_image", [50, 0, 10, 50], images=sample_image)
-    with pytest.raises(ValueError, match="y_min must be less than y_max"):
-        zoom("input_image", [0, 50, 50, 10], images=sample_image)
-
-
-def test_bbox_coordinates_out_of_bounds(sample_image):
-    width, height = sample_image["input_image"].size  # Now 200, 200
-    with pytest.raises(ValueError, match="must be within the image"):
-        zoom("input_image", [-1, 0, 50, 50], images=sample_image)
-    with pytest.raises(ValueError, match="must be within the image"):
-        # Use coordinate > width (200)
-        zoom("input_image", [0, 0, width + 1, 50], images=sample_image)
-    # Add test for y out of bounds
-    with pytest.raises(ValueError, match="must be within the image"):
-        zoom("input_image", [0, -1, 50, 50], images=sample_image)
-    with pytest.raises(ValueError, match="must be within the image"):
-        # Use coordinate > height (200)
-        zoom("input_image", [0, 0, 50, height + 1], images=sample_image)
-
-
-def test_basic_zoom_fixed_magnification(sample_image):
-    # Test a region that would normally be small but gets magnified by 2.5x
-    bbox = [20, 20, 40, 40]  # 20x20 region
-    result = zoom("input_image", bbox, images=sample_image)
+def test_zoom_basic_centered(sample_image):
+    keypoint = [500, 400]  # Center of 1000x800 image
+    result = zoom("input_image", keypoint, images=sample_image)
     assert isinstance(result, Image.Image)
-    # Expected size = 20 * 2.5 = 50, 20 * 2.5 = 50. Meets MIN_SIZE=50.
-    assert result.size == (50, 50)
+    assert result.size == (300, 300)  # Always 300x300 output
 
 
-# Renamed test to reflect fixed magnification
-def test_zoom_fixed_magnification(sample_image):
-    bbox = [10, 10, 50, 50]  # 40x40 region
-    result = zoom("input_image", bbox, images=sample_image)
-    # Expected size = 40 * 2.5 = 100, 40 * 2.5 = 100. Within MIN/MAX.
-    assert result.size == (100, 100)
+def test_zoom_edge_case_top_left(sample_image):
+    keypoint = [50, 40]  # Near top-left
+    result = zoom("input_image", keypoint, images=sample_image)
+    assert isinstance(result, Image.Image)
+    assert result.size == (300, 300)
 
 
-def test_zoom_max_size_constraint(sample_image):
-    # Bbox large enough that 2.5x scaling exceeds MAX_SIZE (400)
-    # Use a bbox valid for the 200x200 image
-    bbox = [0, 0, 180, 180]  # 180x180 region in a 200x200 image
-    result = zoom("input_image", bbox, images=sample_image)
-    # Expected initial size = 180 * 2.5 = 450. Capped by MAX_SIZE=400.
-    # scale_max = min(400/450, 400/450) = 0.888...
-    # scale = max(scale_min_for_50, min(0.888..., 1.0)) = 0.888...
-    # Final size = int(450 * 0.888...) = 400
-    assert result.size == (400, 400)  # Expect size capped at MAX_SIZE
-    assert max(result.size) <= 400
+def test_zoom_edge_case_bottom_right(sample_image):
+    keypoint = [950, 750]  # Near bottom-right
+    result = zoom("input_image", keypoint, images=sample_image)
+    assert isinstance(result, Image.Image)
+    assert result.size == (300, 300)
 
 
-def test_zoom_different_regions(sample_image):
-    # Test corners and center with fixed 2.5x magnification
-    regions = [
-        [0, 0, 20, 20],  # Top-left (20x20 -> 50x50)
-        [80, 0, 99, 20],  # Top-right (19x20 -> 47.5x50 -> 50x53 (scaled by min_size_y))
-        [40, 40, 60, 60],  # Center (20x20 -> 50x50)
-        [
-            0,
-            80,
-            20,
-            99,
-        ],  # Bottom-left (20x19 -> 50x47.5 -> 53x50 (scaled by min_size_x))
-        [
-            80,
-            80,
-            99,
-            99,
-        ],  # Bottom-right (19x19 -> 47.5x47.5 -> 50x50 (scaled by min_size))
-    ]
-
-    expected_sizes = [
-        (50, 50),
-        (
-            50,
-            53,
-        ),  # scale_min = max(50/47.5, 50/50) = 50/47.5 = 1.0526; 47.5*1.0526=50, 50*1.0526=52.6 -> (50, 53)
-        (50, 50),
-        (
-            53,
-            50,
-        ),  # scale_min = max(50/50, 50/47.5) = 50/47.5 = 1.0526; 50*1.0526=52.6, 47.5*1.0526=50 -> (53, 50)
-        (
-            50,
-            50,
-        ),  # scale_min = max(50/47.5, 50/47.5) = 1.0526; 47.5*1.0526=50 -> (50, 50)
-    ]
-
-    for i, bbox in enumerate(regions):
-        result = zoom("input_image", bbox, images=sample_image)
-        # Calculate expected size based on 2.5x scaling and constraints
-        # width, height = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        # target_w, target_h = int(width * 2.5), int(height * 2.5)
-        # scale_min = max(MIN_SIZE / target_w if target_w > 0 else 0, MIN_SIZE / target_h if target_h > 0 else 0)
-        # scale_max = min(MAX_SIZE / target_w if target_w > 0 else float('inf'), MAX_SIZE / target_h if target_h > 0 else float('inf'))
-        # scale = max(min(scale_max, 1.0), scale_min)
-        # expected_width = int(target_w * scale)
-        # expected_height = int(target_h * scale)
-        assert result.size == expected_sizes[i], (
-            f"Region {bbox} failed: expected {expected_sizes[i]}, got {result.size}"
-        )
+def test_zoom_small_image(sample_image):
+    # Use a smaller image where the crop box will be the whole image
+    small_img = Image.new("RGB", (200, 150))
+    small_sample = {"input_image": small_img}
+    keypoint = [100, 75]  # Center of small image
+    result = zoom("input_image", keypoint, images=small_sample)
+    assert isinstance(result, Image.Image)
+    assert result.size == (300, 300)  # Output is still 300x300 after resize
 
 
-def test_zoom_preserve_content(sample_image):
-    bbox = [20, 20, 40, 40]
-    original_crop = sample_image["input_image"].crop(bbox)
-    zoomed = zoom("input_image", bbox, images=sample_image)  # 20x20 -> 50x50
+# It's harder to precisely test *content* after resize, especially with edge cases
+# We rely on the calculate_crop_coordinates tests and assume PIL's crop/resize work.
+# A simple check: ensure the output is not blank for a non-blank input area.
+def test_zoom_content_check(sample_image):
+    # Fill a known area in the original image
+    img = sample_image["input_image"].copy()
+    img.paste((255, 0, 0), (400, 300, 600, 500))  # Red box in the center
+    filled_sample = {"input_image": img}
+    keypoint = [500, 400]  # Center point within the red box
 
-    # Resize original crop for comparison
-    original_resized = original_crop.resize((50, 50), Image.Resampling.LANCZOS)
-
-    # Compare a few pixels to ensure content is preserved after resize
-    assert original_resized.getpixel((0, 0)) == zoomed.getpixel((0, 0))
-    # Check a pixel towards the center/end
-    assert original_resized.getpixel((10, 10)) == zoomed.getpixel((10, 10))
-    assert original_resized.getpixel((49, 49)) == zoomed.getpixel((49, 49))
+    result = zoom("input_image", keypoint, images=filled_sample)
+    assert result.size == (300, 300)
+    # Check a central pixel in the output (should correspond to the red box)
+    # The original keypoint [500, 400] should map to the center [150, 150] in the 300x300 output
+    center_pixel_value = result.getpixel((150, 150))
+    assert center_pixel_value == (255, 0, 0)
 
 
-def test_zoom_aspect_ratio(sample_image):
-    # Test with non-square regions using fixed 2.5x magnification
-    wide_bbox = [
-        20,
-        20,
-        60,
-        30,
-    ]  # Wide rectangle (40x10) -> 100x25 (below min_size Y) -> 200x50 (scaled by min_size Y)
-    tall_bbox = [
-        20,
-        20,
-        30,
-        60,
-    ]  # Tall rectangle (10x40) -> 25x100 (below min_size X) -> 50x200 (scaled by min_size X)
+# --- Tests for parse_zoom_args ---
 
-    wide_result = zoom("input_image", wide_bbox, images=sample_image)
-    tall_result = zoom("input_image", tall_bbox, images=sample_image)
 
-    # Expected sizes after applying min_size constraint while maintaining aspect ratio
-    expected_wide_size = (200, 50)
-    expected_tall_size = (50, 200)
+def test_parse_valid_args():
+    raw = {"name": "zoom", "image_name": "input_image", "keypoint": "[150, 250]"}
+    expected = {"image_name": "input_image", "keypoint": [150, 250]}
+    assert parse_zoom_args(raw) == expected
 
-    assert wide_result.size == expected_wide_size
-    assert tall_result.size == expected_tall_size
 
-    # Check if aspect ratios are preserved (approximately)
-    wide_ratio = wide_result.size[0] / wide_result.size[1]
-    tall_ratio = tall_result.size[0] / tall_result.size[1]
+def test_parse_missing_key():
+    raw = {"name": "zoom", "image_name": "input_image"}
+    with pytest.raises(ValueError, match="Missing required arguments.*keypoint"):
+        parse_zoom_args(raw)
 
-    assert abs(wide_ratio - 4) < 0.01  # Should be close to 4:1
-    assert abs(tall_ratio - 0.25) < 0.01  # Should be close to 1:4
+
+def test_parse_extra_key():
+    raw = {
+        "name": "zoom",
+        "image_name": "input_image",
+        "keypoint": "[100, 100]",
+        "extra": "bad",
+    }
+    with pytest.raises(ValueError, match="Unexpected arguments.*extra"):
+        parse_zoom_args(raw)
+
+
+def test_parse_invalid_json():
+    raw = {
+        "name": "zoom",
+        "image_name": "input_image",
+        "keypoint": "[100, 100",
+    }  # Missing closing bracket
+    with pytest.raises(ValueError, match="Invalid JSON format for 'keypoint'"):
+        parse_zoom_args(raw)
+
+
+def test_parse_keypoint_not_list():
+    raw = {
+        "name": "zoom",
+        "image_name": "input_image",
+        "keypoint": '{"x": 100, "y": 100}',
+    }
+    with pytest.raises(ValueError, match="'keypoint' must be a JSON list"):
+        parse_zoom_args(raw)
+
+
+def test_parse_keypoint_wrong_length():
+    raw = {"name": "zoom", "image_name": "input_image", "keypoint": "[100]"}
+    with pytest.raises(
+        ValueError, match="'keypoint' must be a JSON list of two elements"
+    ):
+        parse_zoom_args(raw)
+    raw = {"name": "zoom", "image_name": "input_image", "keypoint": "[100, 200, 300]"}
+    with pytest.raises(
+        ValueError, match="'keypoint' must be a JSON list of two elements"
+    ):
+        parse_zoom_args(raw)
+
+
+def test_parse_keypoint_wrong_type():
+    raw = {"name": "zoom", "image_name": "input_image", "keypoint": "[100.5, 200]"}
+    with pytest.raises(
+        ValueError, match="elements in 'keypoint' list must be integers"
+    ):
+        parse_zoom_args(raw)
+    raw = {"name": "zoom", "image_name": "input_image", "keypoint": '["100", 200]'}
+    with pytest.raises(
+        ValueError, match="elements in 'keypoint' list must be integers"
+    ):
+        parse_zoom_args(raw)
+
+
+# --- Remove old/irrelevant tests ---
+# (test_invalid_bbox_length, test_invalid_bbox_value_types, test_bbox_coordinates_reversed, etc. are no longer needed)
+# (test_zoom_fixed_magnification, test_zoom_max_size_constraint are replaced by fixed size tests)
+# (test_zoom_different_regions, test_zoom_preserve_content, test_zoom_aspect_ratio are less relevant or covered by new tests)
+
+
+# Keep the main execution block if desired for direct running
+if __name__ == "__main__":
+    # You can add specific calls here for manual testing if needed
+    # e.g., create a sample image and call zoom
+    print("Running manual tests from __main__...")
+    img_w, img_h = 1000, 800
+    kp_center = [500, 400]
+    kp_edge = [50, 40]
+    img = Image.new("RGB", (img_w, img_h), color="blue")
+    images_dict = {"input_image": img}
+
+    try:
+        print(f"\nTesting center keypoint: {kp_center}")
+        result_center = zoom("input_image", kp_center, images=images_dict)
+        print(f"Center zoom output size: {result_center.size}")
+        # result_center.show() # Optionally display the image
+
+        print(f"\nTesting edge keypoint: {kp_edge}")
+        result_edge = zoom("input_image", kp_edge, images=images_dict)
+        print(f"Edge zoom output size: {result_edge.size}")
+        # result_edge.show() # Optionally display the image
+
+        print("\nTesting invalid keypoint:")
+        try:
+            zoom("input_image", [1200, 100], images=images_dict)
+        except ValueError as e:
+            print(f"Caught expected error: {e}")
+
+        print("\nTesting parser:")
+        raw_valid = {
+            "name": "zoom",
+            "image_name": "input_image",
+            "keypoint": "[150, 250]",
+        }
+        parsed = parse_zoom_args(raw_valid)
+        print(f"Parsed valid args: {parsed}")
+
+        raw_invalid = {
+            "name": "zoom",
+            "image_name": "input_image",
+            "keypoint": "[150.5, 250]",
+        }
+        try:
+            parse_zoom_args(raw_invalid)
+        except ValueError as e:
+            print(f"Caught expected parser error: {e}")
+
+    except Exception as e:
+        print(f"An unexpected error occurred during manual testing: {e}")
+
+    print("\nManual tests finished.")
