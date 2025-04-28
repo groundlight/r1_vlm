@@ -1,4 +1,5 @@
 from datasets import Dataset, DatasetDict, load_dataset
+from PIL import Image
 from tqdm import tqdm
 
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
@@ -7,7 +8,7 @@ from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 def generate_r1_messages(example):
     # unpack the example
 
-    image = example["image"]
+    image: Image.Image = example["image"]
     question_id = example["question_id"]
     question = example["question"]
     choices = example["choices"]
@@ -17,6 +18,8 @@ def generate_r1_messages(example):
     correct_choice_idx = example.get("correct_choice_idx", None)
     direct_answers = example.get("direct_answers", None)
     rationales = example.get("rationales", None)
+
+    image_size = image.size
 
     # denormalize the multiple choice answer if it exists for ease of use down the line
     multiple_choice_answer = (
@@ -37,7 +40,7 @@ def generate_r1_messages(example):
 
     {choices_str}
     
-    You must inspect the input image and gather visual evidence.
+    You must inspect the input image and gather visual evidence. The image size is {image_size}.
     """
 
     r1_messages = [

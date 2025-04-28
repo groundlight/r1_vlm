@@ -2,8 +2,6 @@ from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
     create_r1_aok_vqa_tool_use_dataset,
@@ -13,6 +11,8 @@ from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 
 class AOKVQAToolEnv(ToolVisionEnv):
@@ -336,4 +336,4 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
 if __name__ == "__main__":
     env = AOKVQAToolEnv(processing_class=None)
-    print(env.formatted_prompt)
+    train_dataset, val_dataset, test_dataset = env.get_dataset()
