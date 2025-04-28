@@ -11,7 +11,6 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
-from r1_vlm.tools.object_detection import detect_objects, parse_detect_objects_args
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
@@ -22,7 +21,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
         processing_class: AutoProcessor,
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
-            (detect_objects, parse_detect_objects_args),
+            # (detect_objects, parse_detect_objects_args),
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
@@ -223,14 +222,15 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
         def check_execution(conversation):
             """
-            Returns the ratio of successful tool executions to total attempts.
+            Returns the ratio of successful tool executions to total attempts. If no tool calls are made, returns 1.0 to indicate that the model did not fail.
+            I'm hoping this teaches the model to use tools when they are actually needed instead of all the time.
             """
             tool_attempts = 0
             successful_executions = 0
 
             for i, message in enumerate(conversation):
                 if message["role"] == "assistant":
-                    parsed = self.llm_parser.parse(message["content"][0]["text"])
+                    parsed = self.parser.parse(message["content"][0]["text"])
                     if hasattr(parsed, "tool") and parsed.tool is not None:
                         tool_attempts += 1
                         if (
@@ -241,7 +241,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
                             if "Error:" not in response:
                                 successful_executions += 1
 
-            return 0.0 if tool_attempts == 0 else successful_executions / tool_attempts
+            return 1.0 if tool_attempts == 0 else successful_executions / tool_attempts
 
         def tool_execution_reward_func(
             prompts, completions, completions_messages, **kwargs
@@ -259,53 +259,48 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ]
             return rewards
 
+        def check_correctness(conversation, correct_answer):
+            text = conversation[-1]["content"][0]["text"]
+
+            parsed = self.parser.parse(text)
+            if hasattr(parsed, "answer"):
+                answer = parsed.answer
+            else:
+                answer = None
+
+            return answer == correct_answer
+
         def correct_answer_reward_func(
             prompts, completions, completions_messages, **kwargs
         ) -> list[float]:
             """
-            Provides a reward if the model's answer is correct.
+            Provides a reward if the model's answer is correct. Gates on the model either not using tools or using tools correctly.
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )
 
-            # select the last message in each completion (completions are conversations)
-            texts = [
-                c[-1]["content"][0]["text"] for c in merged_completion_conversations
-            ]
-
-            # extract the answer from the completion messages
-            answers = []
-            for text in texts:
-                parsed = self.parser.parse(text)
-                if hasattr(parsed, "answer"):
-                    answers.append(parsed.answer)
-                else:
-                    answers.append(None)
-
             correct_answers = kwargs["multiple_choice_answer"]
 
-            if len(correct_answers) != len(answers):
-                raise ValueError(
-                    f"The number of correct answers ({len(correct_answers)}) does not match the number of answers ({len(answers)})"
+            correctness_results: list[bool] = [
+                check_correctness(conv, correct_answer)
+                for conv, correct_answer in zip(
+                    merged_completion_conversations, correct_answers
                 )
+            ]
 
-            # boolean array that is True IFF the model executed every tool call correctly
-            # In the case where the model did not attempt any tool calls, this will be False
-            tool_executions = [
+            # check if the model used tools correctly
+            tool_executions: list[bool] = [
                 check_execution(conv) == 1.0 for conv in merged_completion_conversations
             ]
 
             rewards = []
-            for answer, correct_answer, tool_execution in zip(
-                answers, correct_answers, tool_executions
+            # gate the correctness reward on the model using tools properly
+            for correctness_result, tool_execution in zip(
+                correctness_results, tool_executions
             ):
-                # gate the correctness reward on the model using tools properly
-                if tool_execution:
-                    if answer == correct_answer:
-                        rewards.append(1.0)
-                    else:
-                        rewards.append(0.0)
+                if tool_execution and correctness_result:
+                    rewards.append(1.0)
                 else:
                     rewards.append(0.0)
 
