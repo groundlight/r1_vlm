@@ -11,7 +11,7 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
-from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
+from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
 
@@ -25,7 +25,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
-        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
+        tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
     ):
         super().__init__(
             processing_class=processing_class,
