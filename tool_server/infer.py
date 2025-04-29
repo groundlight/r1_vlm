@@ -1,108 +1,74 @@
+import contextlib
+import time
+
 import numpy as np
-import tritonclient.http as httpclient
+from imgcat import imgcat
 from PIL import Image
+from tritonclient.http import InferenceServerClient
+from ultralytics import YOLO
 
-# --- Configuration ---
-TRITON_URL = "localhost:8000"  # Triton HTTP endpoint (host:port)
-MODEL_NAME = "yoloe"
-IMAGE_PATH = "/millcreek/home/sunil/r1_vlm_bumbershoot2/r1_vlm/tool_server/cars.jpeg"
-MODEL_INPUT_SHAPE = (
-    640,
-    640,
-)  # Expected input height/width for the ONNX model
-# ---------------------
+# Wait for the Triton server to start
+triton_client = InferenceServerClient(url="localhost:8000", verbose=False, ssl=False)
 
-
-def preprocess(img: Image.Image, target_shape: tuple) -> np.ndarray:
-    """Preprocesses PIL Image for YOLO/ONNX inference."""
-    target_h, target_w = target_shape
-    original_w, original_h = img.size
-
-    # Resize while maintaining aspect ratio (letterboxing/padding)
-    ratio = min(target_w / original_w, target_h / original_h)
-    new_w = int(original_w * ratio)
-    new_h = int(original_h * ratio)
-    img_resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-    # Create a blank canvas (black background)
-    img_padded = Image.new("RGB", (target_w, target_h), (0, 0, 0))
-    # Paste the resized image onto the canvas
-    paste_x = (target_w - new_w) // 2
-    paste_y = (target_h - new_h) // 2
-    img_padded.paste(img_resized, (paste_x, paste_y))
-
-    # Convert to numpy array, normalize to [0, 1], and change layout HWC -> CHW
-    image_data = np.array(img_padded, dtype=np.float32) / 255.0
-    image_data = np.transpose(image_data, (2, 0, 1))  # HWC -> CHW
-
-    # Add batch dimension: CHW -> NCHW
-    image_data = np.expand_dims(image_data, axis=0)
-    return image_data
+# Wait until model is ready
+for _ in range(10):
+    with contextlib.suppress(Exception):
+        assert triton_client.is_model_ready("yolo")
+        break
+    time.sleep(1)
 
 
-# --- Main Inference Logic ---
-try:
-    print(f"Creating Triton client for URL: {TRITON_URL}")
-    # Create Triton HTTP client
-    # Note: verbose=True can help debug connection issues
-    triton_client = httpclient.InferenceServerClient(url=TRITON_URL, verbose=False)
+# Load the Triton Server model
+model = YOLO("http://localhost:8000/yolo", task="detect")
 
-    print("Loading and preprocessing image...")
-    input_image = Image.open(IMAGE_PATH).convert("RGB")
-    processed_image = preprocess(input_image, MODEL_INPUT_SHAPE)
-    print(f"Preprocessed image shape: {processed_image.shape}")
+# load the image via PIL
+img = Image.open(
+    "/millcreek/home/sunil/r1_vlm_bumbershoot0/r1_vlm/tool_server/cars.jpeg"
+)
 
-    # --- Create Inference Inputs ---
-    inputs = []
-    inputs.append(httpclient.InferInput("images", processed_image.shape, "FP32"))
-    inputs[0].set_data_from_numpy(processed_image)
+# create 10 noisy copies and their crops
+test_images = []
+crop_ratios = [(2, 1), (1, 1), (1, 2)]
 
-    # --- Define Inference Outputs (requesting specific outputs) ---
-    outputs = []
-    # Request the outputs defined in config.pbtxt
-    outputs.append(httpclient.InferRequestedOutput("output0"))
-    outputs.append(httpclient.InferRequestedOutput("output1"))
+for i in range(10):
+    # Create noisy image
+    arr = np.array(img)
+    noise = np.random.normal(0, 5, arr.shape)
+    noisy_arr = np.clip(arr + noise, 0, 255).astype(np.uint8)
+    noisy_img = Image.fromarray(noisy_arr)
 
-    # --- Run Inference ---
-    print(f"Sending inference request to model '{MODEL_NAME}'...")
-    results = triton_client.infer(model_name=MODEL_NAME, inputs=inputs, outputs=outputs)
-    print("Inference request complete.")
+    # Create crops for this noisy image
+    img_w, img_h = noisy_img.size
+    for w_ratio, h_ratio in crop_ratios:
+        if img_w / img_h > w_ratio / h_ratio:
+            crop_h = img_h
+            crop_w = int(crop_h * w_ratio / h_ratio)
+        else:
+            crop_w = img_w
+            crop_h = int(crop_w * h_ratio / w_ratio)
 
-    # --- Process Results ---
-    # Get the raw numpy arrays from the response
-    raw_output0 = results.as_numpy("output0")
-    raw_output1 = results.as_numpy("output1")
+        x0 = np.random.randint(0, img_w - crop_w + 1)
+        y0 = np.random.randint(0, img_h - crop_h + 1)
+        cropped = noisy_img.crop((x0, y0, x0 + crop_w, y0 + crop_h))
+        test_images.append(
+            {"image": cropped, "ratio": f"{w_ratio}:{h_ratio}", "noise_id": i}
+        )
+speeds = []
 
-    print("\n--- Raw Triton Output ---")
-    print(f"Output 'output0' shape: {raw_output0.shape}")
-    print(f"Output 'output1' shape: {raw_output1.shape}")
-
-    # Optional: Print some data to verify it's not all zeros
+# run inference on each variant
+for test_case in test_images:
+    start = time.time()
+    results = model(test_case["image"])  # Pass the cropped image
+    end = time.time()
+    speeds.append(end - start)
     print(
-        f"\nSample data from output0 (first few elements):\n{raw_output0.flatten()[:10]}"
-    )
-    print(
-        f"\nSample data from output1 (first few elements):\n{raw_output1.flatten()[:10]}"
+        f"Noise #{test_case['noise_id']}, Aspect ratio {test_case['ratio']} – time taken: {end - start} seconds"
     )
 
-    # Simple check if any detections might be present in output0
-    # Shape is typically (batch, num_predictions, box_coords + classes)
-    # For YOLO, usually 4 box coords + 1 obj score + num_classes scores
-    # Here it's (1, 116, 8400) -> (batch, 4 coords + 80 classes + 32 mask_coeffs ?, 8400 proposals)
-    # This structure needs careful parsing based on the exact YOLOE export format.
-    # A simpler check for now is just non-zero elements.
-    if np.any(raw_output0):
-        print("\nDetected non-zero values in 'output0', potential detections present.")
-    else:
-        print("\n'output0' appears to be all zeros.")
+    # Convert the cropped image to numpy for visualization
+    vis_img = np.array(test_case["image"])
+    # Plot directly on the cropped image
+    plotted = results[0].plot(img=vis_img)
+    imgcat(Image.fromarray(plotted))
 
-    if np.any(raw_output1):
-        print("Detected non-zero values in 'output1', potential masks present.")
-    else:
-        print("'output1' appears to be all zeros.")
-
-
-except Exception as e:
-    print(f"\nAn error occurred: {e}")
-
-print("\n-------------------------")
+print(speeds)
