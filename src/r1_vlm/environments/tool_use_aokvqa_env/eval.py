@@ -20,7 +20,9 @@ def extract_answer(generation: str):
 
 
 def main():
-    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-zoom-only-reward-refactor-oversampling/checkpoint-400"
+    checkpoint = (
+        "/millcreek/home/sunil/r1_vlm_bumbershoot2/r1_vlm/checkpoint-500-better-zoom"
+    )
     processor = AutoProcessor.from_pretrained(checkpoint, padding_side="left")
     vf_env = AOKVQAToolEnv(processing_class=processor)
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
