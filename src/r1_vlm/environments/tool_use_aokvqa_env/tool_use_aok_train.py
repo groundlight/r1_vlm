@@ -4,10 +4,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
+
+from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
@@ -115,8 +115,8 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=5,
-        num_train_epochs=10,
+        save_total_limit=10,
+        num_train_epochs=1,
         per_device_train_batch_size=2,
         num_generations=6,
         gradient_accumulation_steps=4,

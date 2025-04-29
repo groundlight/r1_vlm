@@ -22,8 +22,7 @@ _object_detection_tool = None
 
 class ObjectDetectionTool:
     def __init__(self):
-        # url = f"{API_IP}:{API_PORT}/yolo"
-        url = "localhost:8000/yolo"
+        url = f"{API_IP}:{API_PORT}/yolo"
         self.triton_client = InferenceServerClient(url=url, verbose=False, ssl=False)
 
         # Wait until model is ready
@@ -33,7 +32,7 @@ class ObjectDetectionTool:
                 break
             time.sleep(1)
 
-        self.model = YOLO("http://localhost:8000/yolo", task="detect")
+        self.model = YOLO(f"http://{url}", task="detect")
 
     def detect_objects(self, image: Image.Image) -> list[dict]:
         result = self.model(image, conf=0.3)[0]
