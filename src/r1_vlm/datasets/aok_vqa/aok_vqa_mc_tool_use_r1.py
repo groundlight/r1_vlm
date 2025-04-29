@@ -37,7 +37,7 @@ def generate_r1_messages(example):
 
     {choices_str}
     
-    You must use the tools to inspect the input image and gather visual evidence.
+    You must inspect the input image and gather visual evidence.
     """
 
     r1_messages = [
@@ -63,7 +63,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> I'll collect as much visual evidence as possible from the image, and then consider all possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world. First, I'll consider the tools available to me and determine which one is most likely to help me collect the evidence needed to answer the question and how to best call it.",
+                    "text": "\n<think> I'll collect as much visual evidence as possible from the image. First, I'll consider what region of the image to zoom in on to get the most information. Then, I'll review and consider the four possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world.",
                 }
             ],
         },

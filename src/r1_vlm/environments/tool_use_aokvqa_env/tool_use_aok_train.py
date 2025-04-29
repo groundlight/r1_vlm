@@ -91,8 +91,11 @@ def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
+    print("loaded model")
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
+
+    print("loaded env")
 
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
 
@@ -103,9 +106,10 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-tool-use-aokvqa-env-reduced-beta-single-tool",
+        output_dir="vlm-r1-zoom-only-reward-refactor-oversampling",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
+        max_grad_norm=1.0,
         adam_beta2=0.98,
         lr_scheduler_type="cosine",
         warmup_steps=10,
@@ -148,6 +152,7 @@ def train():
         train_dataset=train_dataset,
         env=vf_env,
         peft_config=peft_config,
+        guided_regex=None,
     )
 
     trainer.train()
