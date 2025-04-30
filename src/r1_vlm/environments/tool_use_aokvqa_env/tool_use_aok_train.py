@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 
 import torch
@@ -164,16 +163,6 @@ def train():
 
 
 if __name__ == "__main__":
-    # --- Set Multiprocessing Start Method to FORKSERVER ---
-    # Offers a potential speedup over 'spawn' while aiming for better
-    # isolation than 'fork' for CUDA. Still experimental here.
-    try:
-        multiprocessing.set_start_method("forkserver", force=True)
-        print("Multiprocessing start method set to 'forkserver'.")
-    except RuntimeError as e:
-        print(f"Multiprocessing start method already set or error setting it: {e}")
-    # --- End Set Start Method ---
-
     train()
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
