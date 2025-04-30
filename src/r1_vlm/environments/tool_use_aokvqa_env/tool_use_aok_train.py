@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 
 import torch
@@ -88,7 +89,7 @@ def find_target_linear_names(
 
 
 def train():
-    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-new-od-tool-reward-schedule-for-tools-apr-29/checkpoint-200"
+    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-new-od-tool-reward-schedule-for-tools-apr-29-restart/checkpoint-50"
 
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(
@@ -110,7 +111,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-new-od-tool-reward-schedule-for-tools-apr-29-restart",
+        output_dir="vlm-r1-new-od-tool-reward-schedule-for-tools-apr-29-restart-2",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -163,6 +164,17 @@ def train():
 
 
 if __name__ == "__main__":
+    # --- Set Multiprocessing Start Method ---
+    # Must be done early, before processes are created, and ideally only once.
+    # Using force=True might be necessary if it's potentially set elsewhere.
+    try:
+        multiprocessing.set_start_method("spawn", force=True)
+        print("Multiprocessing start method set to 'spawn'.")
+    except RuntimeError as e:
+        # Handles cases where the start method might have already been set.
+        print(f"Multiprocessing start method already set or error setting it: {e}")
+    # --- End Set Start Method ---
+
     train()
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
