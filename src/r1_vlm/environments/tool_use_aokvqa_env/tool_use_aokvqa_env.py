@@ -319,16 +319,18 @@ class AOKVQAToolEnv(ToolVisionEnv):
         completions_with_detect_objects_use = 0
 
         for completion in completions_text:
-            tool_use_regex = r".*<tool>.*</tool>.*"
+            tool_use_regex = r"<tool>(.*?)</tool>"
             zoom_use_string = "name: zoom"
             detect_objects_use_string = "name: detect_objects"
 
-            if re.search(tool_use_regex, completion, re.DOTALL):
+            tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
+            if tool_matches:
                 completions_with_tool_use += 1
-            if zoom_use_string in completion:
-                completions_with_zoom_use += 1
-            if detect_objects_use_string in completion:
-                completions_with_detect_objects_use += 1
+                for tool_content in tool_matches:
+                    if zoom_use_string in tool_content:
+                        completions_with_zoom_use += 1
+                    if detect_objects_use_string in tool_content:
+                        completions_with_detect_objects_use += 1
 
         print(
             f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom, and {completions_with_detect_objects_use} of which attempt to use detect_objects"
