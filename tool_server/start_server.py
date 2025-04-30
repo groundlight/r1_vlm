@@ -20,7 +20,7 @@ subprocess.call(f"docker pull {tag}", shell=True)
 container_id = (
     subprocess.check_output(
         # Use the absolute path here
-        f"docker run -d --gpus 0 -v {absolute_triton_repo_path}:/models -p 8000:8000 {tag} tritonserver --model-repository=/models",
+        f"docker run -d --gpus 0 -v {absolute_triton_repo_path}:/models -p 0.0.0.0:8000:8000 {tag} tritonserver --model-repository=/models",
         shell=True,
     )
     .decode("utf-8")
