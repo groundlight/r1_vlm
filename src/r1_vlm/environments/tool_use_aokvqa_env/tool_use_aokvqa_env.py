@@ -313,3 +313,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
 if __name__ == "__main__":
     env = AOKVQAToolEnv(processing_class=None)
     train_dataset, val_dataset, test_dataset = env.get_dataset()
+    import ipdb
+
+    ipdb.set_trace()
+    print("hi")
