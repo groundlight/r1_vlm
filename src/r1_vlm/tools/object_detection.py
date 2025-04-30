@@ -1,6 +1,7 @@
 import contextlib
 import json
 import os
+import threading
 import time  # Import the time module
 
 # Add imports for numpy and cv2
@@ -9,6 +10,7 @@ from imgcat import imgcat
 from PIL import Image
 from tritonclient.http import InferenceServerClient
 from ultralytics import YOLO
+from ultralytics.utils import ThreadingLocked
 
 from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
@@ -34,12 +36,21 @@ class ObjectDetectionTool:
                 break
             time.sleep(1)
 
-        self.model = YOLO(f"http://{self.url}", task="detect")
+        # Thread-local storage for model instances
+        self._thread_local = threading.local()
 
-    def detect_objects(self, image: Image.Image) -> list[dict]:
-        local_model = YOLO(f"http://{self.url}", task="detect")
+    def _get_model(self):
+        """Get or create thread-local model instance"""
+        if not hasattr(self._thread_local, "model"):
+            self._thread_local.model = YOLO(f"http://{self.url}", task="detect")
+        return self._thread_local.model
 
-        result = local_model(image, conf=0.3)[0]
+    @ThreadingLocked()
+    def detect_objects(self, image: Image.Image) -> dict:
+        """Thread-safe object detection using thread-local model instances"""
+        model = self._get_model()
+        result = model(image, conf=0.3)[0]
+
         boxes = [[int(round(x)) for x in box] for box in result.boxes.xyxy.tolist()]
         labels = [result.names[int(cls)] for cls in result.boxes.cls.tolist()]
 
@@ -62,6 +73,12 @@ class ObjectDetectionTool:
             # convert to rgb and then to PIL image
             annotated_image = Image.fromarray(annotated_image[..., ::-1])
         return {"text_data": dets_string, "image_data": annotated_image}
+
+    def __del__(self):
+        """Cleanup method to ensure resources are properly released"""
+        if hasattr(self, "_thread_local"):
+            if hasattr(self._thread_local, "model"):
+                del self._thread_local.model
 
 
 def set_object_detection_tool(tool: ObjectDetectionTool):

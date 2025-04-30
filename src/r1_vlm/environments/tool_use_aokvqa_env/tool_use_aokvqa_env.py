@@ -10,7 +10,6 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.object_detection import (
     ObjectDetectionTool,
@@ -115,7 +114,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
-                schedule = create_linear_decay_schedule(1.0, 0.0, 200)
+                # schedule = create_linear_decay_schedule(1.0, 0.0, 200)
+                schedule = 0.0  # restarting the run, past step 200
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
