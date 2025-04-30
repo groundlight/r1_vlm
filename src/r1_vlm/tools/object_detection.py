@@ -162,9 +162,12 @@ if __name__ == "__main__":
     image = Image.open(
         "/millcreek/home/sunil/r1_vlm_bumbershoot0/r1_vlm/src/r1_vlm/tools/cars.jpeg"
     )
-    detections = detect_objects(image_name="input_image", images={"input_image": image})
+    for i in range(10):
+        detections = detect_objects(
+            image_name="input_image", images={"input_image": image}
+        )
 
-    image_data = detections["image_data"]
-    imgcat(image_data)
-    text_data = detections["text_data"]
-    print(text_data)
+        image_data = detections["image_data"]
+        imgcat(image_data)
+        text_data = detections["text_data"]
+        print(text_data)
