@@ -22,8 +22,10 @@ _object_detection_tool = None
 
 class ObjectDetectionTool:
     def __init__(self):
-        url = f"{API_IP}:{API_PORT}/yolo"
-        self.triton_client = InferenceServerClient(url=url, verbose=False, ssl=False)
+        self.url = f"{API_IP}:{API_PORT}/yolo"
+        self.triton_client = InferenceServerClient(
+            url=self.url, verbose=False, ssl=False
+        )
 
         # Wait until model is ready
         for _ in range(10):
@@ -32,10 +34,12 @@ class ObjectDetectionTool:
                 break
             time.sleep(1)
 
-        self.model = YOLO(f"http://{url}", task="detect")
+        self.model = YOLO(f"http://{self.url}", task="detect")
 
     def detect_objects(self, image: Image.Image) -> list[dict]:
-        result = self.model(image, conf=0.3)[0]
+        local_model = YOLO(f"http://{self.url}", task="detect")
+
+        result = local_model(image, conf=0.3)[0]
         boxes = [[int(round(x)) for x in box] for box in result.boxes.xyxy.tolist()]
         labels = [result.names[int(cls)] for cls in result.boxes.cls.tolist()]
 
@@ -55,7 +59,8 @@ class ObjectDetectionTool:
                     dets_string += "\n"
 
             annotated_image = result.plot(conf=False, labels=True)
-
+            # convert to rgb and then to PIL image
+            annotated_image = Image.fromarray(annotated_image[..., ::-1])
         return {"text_data": dets_string, "image_data": annotated_image}
 
 
