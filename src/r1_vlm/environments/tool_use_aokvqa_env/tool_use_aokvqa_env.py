@@ -114,8 +114,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 schedule = 0.1
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                # linearly decay from 0.1 to 0.0 over 200 global steps (200 gradient updates)
-                schedule = create_linear_decay_schedule(0.1, 0.0, 200)
+                # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
+                schedule = create_linear_decay_schedule(1.0, 0.0, 200)
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
