@@ -319,7 +319,6 @@ class AOKVQAToolEnv(ToolVisionEnv):
         completions_with_detect_objects_use = 0
 
         for completion in completions_text:
-            print(f"HERE: {completion}")
             tool_use_regex = r".*<tool>.*</tool>.*"
             zoom_use_string = "name: zoom"
             detect_objects_use_string = "name: detect_objects"
