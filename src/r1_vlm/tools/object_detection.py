@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from imgcat import imgcat
 from PIL import Image
 from tritonclient.http import InferenceServerClient
-from ultralytics import YOLO
 
 from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
@@ -24,24 +23,30 @@ _object_detection_tool = None
 
 # --- Worker Process Function ---
 def _yolo_worker(conn, url, image_bytes):
-    """Runs YOLO detection in a separate process."""
+    """Runs YOLO detection in a separate process, forcing CPU."""
+    # --- Force CPU for this process ---
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+    # --- End Force CPU ---
+
     try:
+        # --- Import YOLO *inside* the worker, *after* setting CUDA_VISIBLE_DEVICES ---
+        from ultralytics import YOLO
+        # Note: This will also import torch internally here in the child process
+        # --- End Import ---
+
         t_start = time.time()
+
         # Deserialize image
         image = pickle.loads(image_bytes)
         t_deserialized = time.time()
 
-        # Create transient model instance INSIDE the subprocess
-        # Note: Add requests patch here if needed for the subprocess context
-        # import requests
-        # _worker_session = requests.Session()
-        # requests.Session = lambda *args, **kwargs: _worker_session
-        # requests.session = lambda *args, **kwargs: _worker_session
-        model = YOLO(f"http://{url}", task="detect")
+        # Create transient model instance INSIDE the subprocess (will use CPU)
+        model = YOLO(f"http://{url}", task="detect")  # Should now default to CPU
         t_model_created = time.time()
         result = model(image, conf=0.3)[0]
         t_inference_done = time.time()
-        del model  # Explicitly delete
+        del model
 
         # Extract necessary data
         boxes = [[int(round(x)) for x in box] for box in result.boxes.xyxy.tolist()]
@@ -58,18 +63,27 @@ def _yolo_worker(conn, url, image_bytes):
         serialized_output = pickle.dumps(output)
         t_results_serialized = time.time()
 
-        # Print worker timings
+        # Print worker timings (original)
+        # print(...) # Keep this or comment out if too verbose
+
+        t_before_send = time.time()
+        print(f"  [Worker {os.getpid()} CPU] Attempting to send results...")
+        conn.send(serialized_output)
+        t_after_send = time.time()
+        print(f"  [Worker {os.getpid()} CPU] Results sent.")
+
+        # Print worker timings (updated with send time)
         print(
-            f"  [Worker {os.getpid()}] Timings (s): "
-            f"Deserialize: {t_deserialized - t_start:.3f}, "
-            f"ModelCreate: {t_model_created - t_deserialized:.3f}, "
-            f"Inference: {t_inference_done - t_model_created:.3f}, "
-            f"Extract: {t_results_extracted - t_inference_done:.3f}, "
-            f"Serialize: {t_results_serialized - t_results_extracted:.3f}, "
-            f"Total: {t_results_serialized - t_start:.3f}"
+            f"  [Worker {os.getpid()} CPU] Timings (s): "
+            f"Deserialize: {t_deserialized - t_start:.4f}, "
+            f"ModelCreate: {t_model_created - t_deserialized:.4f}, "
+            f"Inference: {t_inference_done - t_model_created:.4f}, "
+            f"Extract: {t_results_extracted - t_inference_done:.4f}, "
+            f"Serialize: {t_results_serialized - t_results_extracted:.4f}, "
+            f"Send: {t_after_send - t_before_send:.4f}, "  # Added Send time
+            f"Total: {t_after_send - t_start:.4f}"  # Use t_after_send for total now
         )
 
-        conn.send(serialized_output)
     except Exception as e:
         # Send back exception info if something goes wrong
         print(f"YOLO Worker Error: {e}")  # Log error in worker

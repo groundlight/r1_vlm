@@ -164,14 +164,13 @@ def train():
 
 
 if __name__ == "__main__":
-    # --- Set Multiprocessing Start Method ---
-    # Must be done early, before processes are created, and ideally only once.
-    # Using force=True might be necessary if it's potentially set elsewhere.
+    # --- Set Multiprocessing Start Method to FORKSERVER ---
+    # Offers a potential speedup over 'spawn' while aiming for better
+    # isolation than 'fork' for CUDA. Still experimental here.
     try:
-        multiprocessing.set_start_method("spawn", force=True)
-        print("Multiprocessing start method set to 'spawn'.")
+        multiprocessing.set_start_method("forkserver", force=True)
+        print("Multiprocessing start method set to 'forkserver'.")
     except RuntimeError as e:
-        # Handles cases where the start method might have already been set.
         print(f"Multiprocessing start method already set or error setting it: {e}")
     # --- End Set Start Method ---
 
