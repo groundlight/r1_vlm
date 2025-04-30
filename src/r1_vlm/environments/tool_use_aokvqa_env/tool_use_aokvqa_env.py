@@ -1,3 +1,4 @@
+import re
 from typing import Any, Callable
 
 from datasets import Dataset
@@ -308,6 +309,44 @@ class AOKVQAToolEnv(ToolVisionEnv):
             tool_execution_reward_func,
             correct_answer_reward_func,
         ]
+
+    def log_metrics(self, conversations, completions_text, completion_messages):
+        # 1. compute how many completions attempt to use any tool
+        # 2. for each tool, compute how many completions attempt to use it
+
+        completions_with_tool_use = 0
+        completions_with_zoom_use = 0
+        completions_with_detect_objects_use = 0
+
+        for completion in completions_text:
+            print(f"HERE: {completion}")
+            tool_use_regex = r".*<tool>.*</tool>.*"
+            zoom_use_string = "name: zoom"
+            detect_objects_use_string = "name: detect_objects"
+
+            if re.search(tool_use_regex, completion, re.DOTALL):
+                completions_with_tool_use += 1
+            if zoom_use_string in completion:
+                completions_with_zoom_use += 1
+            if detect_objects_use_string in completion:
+                completions_with_detect_objects_use += 1
+
+        print(
+            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom, and {completions_with_detect_objects_use} of which attempt to use detect_objects"
+        )
+
+        num_completions = len(completions_text)
+        tool_use_proportion = completions_with_tool_use / num_completions
+        zoom_use_proportion = completions_with_zoom_use / num_completions
+        detect_objects_use_proportion = (
+            completions_with_detect_objects_use / num_completions
+        )
+
+        return {
+            "tool_use_proportion": tool_use_proportion,
+            "zoom_use_proportion": zoom_use_proportion,
+            "detect_objects_use_proportion": detect_objects_use_proportion,
+        }
 
 
 if __name__ == "__main__":
