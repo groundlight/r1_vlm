@@ -38,6 +38,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
         ],
         max_steps: int = 3,
         tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
+        use_combined_tool_correctness_reward: bool = False,
     ):
         super().__init__(
             processing_class=processing_class,
@@ -53,6 +54,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ("answer", ["answer"]),
             ("tool", ["tool"]),
         ]
+        self.use_combined_tool_correctness_reward = use_combined_tool_correctness_reward
 
     def parse(self, text: str, strip: bool = True):
         return self.parser.parse(text, strip=strip)
@@ -120,6 +122,10 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
+                # consistent high reward for getting the answer right
+                schedule = 1.0
+                reward_weights.append(schedule)
+            elif reward_function.__name__ == "combined_tool_correctness_reward_func":
                 # consistent high reward for getting the answer right
                 schedule = 1.0
                 reward_weights.append(schedule)
@@ -233,6 +239,17 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
             return [check_format(m) for m in merged_completion_conversations]
 
+        def check_tool_use_attempt(conversation) -> bool:
+            """
+            Returns True if the model attempts to use any tool.
+            """
+            for i, message in enumerate(conversation):
+                if message["role"] == "assistant":
+                    parsed = self.parser.parse(message["content"][0]["text"])
+                    if hasattr(parsed, "tool") and parsed.tool is not None:
+                        return True
+            return False
+
         def check_execution(conversation):
             """
             Returns the ratio of successful tool executions to total attempts.
@@ -304,11 +321,67 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
             return [1.0 if result else 0.0 for result in correctness_results]
 
-        return [
-            format_reward_func,
-            tool_execution_reward_func,
-            correct_answer_reward_func,
-        ]
+        def combined_tool_correctness_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ) -> list[float]:
+            """
+            Reward function that checks if tools were executed successfully only if tool use is necessary to answer the question.
+            """
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            # For each response sampled, check if the completion has the correct answer
+            correct_answers = kwargs["multiple_choice_answer"]
+            correctness_results: list[bool] = [
+                check_correctness(conv, correct_answer)
+                for conv, correct_answer in zip(
+                    merged_completion_conversations, correct_answers
+                )
+            ]
+            # For each response sampled, check if the any tool use is correct
+            tool_use_correctness: list[bool] = [
+                check_execution(conv) > 0.0 for conv in merged_completion_conversations
+            ]
+            # For each response sampled, check if the model attempts to use any tool
+            tool_use_attempts: list[bool] = [
+                check_tool_use_attempt(conv) for conv in merged_completion_conversations
+            ]
+
+            # For all responses sampled, check if there is a completion that has the correct answer successfully using a tool
+            correct_with_tool = any(correctness_results[i] and tool_use_correctness[i] for i in range(len(correctness_results)))
+            # For all responses sampled, check if there is a completion that has the correct answer without successfully using a tool
+            correct_without_tool = any(correctness_results[i] and not tool_use_correctness[i] for i in range(len(correctness_results)))
+
+            if correct_without_tool:
+                # If the question is answerable without using a tool, the model will be penalized for using a tool
+                rewards = [
+                    0.0 if not correctness_results[i] else 
+                    (0.5 if tool_use_attempts[i] else 1.0)
+                    for i in range(len(correctness_results))
+                ]
+            elif correct_with_tool:
+                # The model is only rewarded if the tool use used correctly, AND the answer is correct
+                rewards = [
+                    1.0 if correctness_results[i] and tool_use_correctness[i] else 0.0
+                    for i in range(len(correctness_results))
+                ]
+            else:
+                # The model is not rewarded for any incorrect responses
+                rewards = [0.0 for _ in range(len(correctness_results))]
+            return rewards
+
+        if self.use_combined_tool_correctness_reward:
+            return [
+                format_reward_func,
+                combined_tool_correctness_reward_func,
+            ]
+        else:
+            return [
+                format_reward_func,
+                tool_execution_reward_func,
+                correct_answer_reward_func,
+            ]
 
     def log_metrics(self, conversations, completions_text, completion_messages):
         # 1. compute how many completions attempt to use any tool
