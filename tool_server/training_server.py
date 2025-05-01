@@ -130,7 +130,11 @@ async def detect_objects_api(request: DetectionRequest):
         boxes = [[int(round(x)) for x in box] for box in result.boxes.xyxy.tolist()]
         labels = [result.names[int(cls)] for cls in result.boxes.cls.tolist()]
         detections = [
-            {"bbox_2d": box, "label": label} for box, label in zip(boxes, labels)
+            {
+                "label": label,
+                "bbox_2d": box,
+            }
+            for box, label in zip(boxes, labels)
         ]
 
         # 4. Format Output String
