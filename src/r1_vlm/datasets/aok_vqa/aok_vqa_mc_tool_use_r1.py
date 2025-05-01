@@ -39,12 +39,7 @@ def generate_r1_messages(example):
     Question: {question}
 
     {choices_str} You must choose one to answer the question and place in <answer> tags. 
-    
-    During your thinking process, you should:
-    1. Inspect the input image to gather visual evidence. 
-    2. Recall your knowledge of the world that will help you select the best answer. 
-    3. Consider the merits of all 4 possible answers when selecting the best answer. 
-    
+        
     The image size is {image_size}.
     """
 
