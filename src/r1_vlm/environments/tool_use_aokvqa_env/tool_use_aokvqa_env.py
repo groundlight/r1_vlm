@@ -3,15 +3,12 @@ from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
     create_r1_aok_vqa_tool_use_dataset,
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.object_detection import (
     ObjectDetectionTool,
@@ -21,6 +18,8 @@ from r1_vlm.tools.object_detection import (
 )
 from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 # This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
 od_tool = ObjectDetectionTool()
@@ -115,8 +114,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 schedule = 0.1
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
-                schedule = create_linear_decay_schedule(1.0, 0.0, 200)
+                # no reward for tool execution, but we keep the func as a signal to monitor
+                schedule = 0.0
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":

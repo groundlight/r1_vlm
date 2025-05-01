@@ -189,5 +189,5 @@ src/r1_vlm/environments/real_iad_env/sft/output/*
 *.engine
 *.pbtxt
 *.onnx
-
 checkpoint*
+generations*.json
