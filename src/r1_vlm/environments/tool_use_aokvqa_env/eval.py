@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from copy import deepcopy
 
 from datasets import Dataset
 from imgcat import imgcat
@@ -153,6 +154,14 @@ if __name__ == "__main__":
         if os.path.isdir(os.path.join(checkpoints_folder, f))
     ]
 
+    checkpoints_to_eval = ["150", "350", "600"]
+
+    checkpoint_paths = [
+        path
+        for path in checkpoint_paths
+        if any(num in path for num in checkpoints_to_eval)
+    ]
+
     processor = AutoProcessor.from_pretrained(checkpoint_paths[0], padding_side="left")
     env = AOKVQAToolEnv(processing_class=processor)
     train_dataset, val_dataset, test_dataset = env.get_dataset()
@@ -166,10 +175,12 @@ if __name__ == "__main__":
         )
         if not os.path.exists(file_path):
             generate_completions(
-                checkpoint_path, file_path, val_dataset, env, processor
+                checkpoint_path, file_path, deepcopy(val_dataset), env, processor
             )
+        else:
+            print(f"Skipping {checkpoint_path} because it already exists")
 
-        results = evaluate(file_path, val_dataset)
+        results = evaluate(file_path, deepcopy(val_dataset))
         results_dict[checkpoint_path] = results
 
     print(results_dict)
