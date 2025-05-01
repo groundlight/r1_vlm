@@ -40,7 +40,12 @@ def generate_r1_messages(example):
 
     {choices_str} You must choose one to answer the question and place in <answer> tags. 
     
-    During your thinking process, you should inspect the input image to gather visual evidence. After you've collected evidence, combine that with your knowledge of the world to answer the question. Then consider the merits of all 4 possible answers when selecting the best answer. The image size is {image_size}.
+    During your thinking process, you should:
+    1. Inspect the input image to gather visual evidence. 
+    2. Recall your knowledge of the world that will help you select the best answer. 
+    3. Consider the merits of all 4 possible answers when selecting the best answer. 
+    
+    The image size is {image_size}.
     """
 
     r1_messages = [
