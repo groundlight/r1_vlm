@@ -4,10 +4,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-
-from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 from trl import GRPOConfig, ModelConfig
 from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
+
+from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
@@ -92,8 +92,14 @@ def train():
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
     print("loaded model")
+    num_generations = 6
 
-    vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
+    vf_env = AOKVQAToolEnv(
+        processing_class=processor,
+        max_steps=3,
+        num_generations=num_generations,
+        use_combined_tool_correctness_reward=True,
+    )
 
     print("loaded env")
 
@@ -106,7 +112,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-new-zoom-tool-reward-independent-oversampling",
+        output_dir="vlm-r1-new-fancy-tool-aligned-reward-may1",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -115,8 +121,8 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=5,
-        num_train_epochs=10,
+        save_total_limit=10,
+        num_train_epochs=1,
         per_device_train_batch_size=2,
         num_generations=6,
         gradient_accumulation_steps=4,

@@ -28,7 +28,7 @@ def generate_r1_messages(example):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    choices_str = "These are the possible answers, you must choose one: "
+    choices_str = "Possible answers: "
     for i, choice in enumerate(choices):
         if i == len(choices) - 1:
             choices_str += f"or {choice}."
@@ -36,11 +36,11 @@ def generate_r1_messages(example):
             choices_str += f"{choice}, "
 
     instruction = f"""
-    {question}
+    Question: {question}
 
-    {choices_str}
+    {choices_str} You must choose one to answer the question and place in <answer> tags. 
     
-    You must inspect the input image and gather visual evidence. The image size is {image_size}.
+    You must inspect the input image to gather visual evidence. After you've collected evidence, combine that with your knowledge of the world to answer the question. You must consider all 4 possible answers when thinking through your reasoning. The image size is {image_size}.
     """
 
     r1_messages = [
@@ -66,7 +66,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> I'll collect as much visual evidence as possible from the image. First, I'll consider what region of the image to zoom in on to get the most information. Then, I'll review and consider the four possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world.",
+                    "text": "\n<think> I'll collect as much visual evidence as possible from the image. Then, I'll consider the four possible answers. Finally, I'll select the most likely answer based on the evidence and my knowledge of the world.",
                 }
             ],
         },

@@ -1,18 +1,30 @@
+import re
 from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
     create_r1_aok_vqa_tool_use_dataset,
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
+from r1_vlm.tools.object_detection import (
+    ObjectDetectionTool,
+    detect_objects,
+    parse_detect_objects_args,
+    set_object_detection_tool,
+)
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
+
+# This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
+od_tool = ObjectDetectionTool()
+set_object_detection_tool(od_tool)
 
 
 class AOKVQAToolEnv(ToolVisionEnv):
@@ -21,11 +33,13 @@ class AOKVQAToolEnv(ToolVisionEnv):
         processing_class: AutoProcessor,
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
-            # (detect_objects, parse_detect_objects_args),
+            (detect_objects, parse_detect_objects_args),
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
         tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
+        num_generations: int = 6,
+        use_combined_tool_correctness_reward: bool = False,
     ):
         super().__init__(
             processing_class=processing_class,
@@ -41,6 +55,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ("answer", ["answer"]),
             ("tool", ["tool"]),
         ]
+        self.num_generations = num_generations
+        self.use_combined_tool_correctness_reward = use_combined_tool_correctness_reward
 
     def parse(self, text: str, strip: bool = True):
         return self.parser.parse(text, strip=strip)
@@ -103,12 +119,22 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 schedule = 0.1
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                schedule = 0.1
+                # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
+                schedule = (
+                    create_linear_decay_schedule(1.0, 0.0, 200)
+                    if not self.use_combined_tool_correctness_reward
+                    # quick burst of reward for tool use at the beginning to teach the model to use tools
+                    else create_linear_decay_schedule(1.0, 0.0, 50)
+                )
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
                 # consistent high reward for getting the answer right
-                schedule = 1.0
+                schedule = 1.0 if not self.use_combined_tool_correctness_reward else 0.0
+                reward_weights.append(schedule)
+            elif reward_function.__name__ == "combined_tool_correctness_reward_func":
+                # consistent high reward for getting the answer right
+                schedule = 1.0 if self.use_combined_tool_correctness_reward else 0.0
                 reward_weights.append(schedule)
             else:
                 raise ValueError(
@@ -220,6 +246,17 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
             return [check_format(m) for m in merged_completion_conversations]
 
+        def check_tool_use_attempt(conversation) -> bool:
+            """
+            Returns True if the model attempts to use any tool.
+            """
+            for i, message in enumerate(conversation):
+                if message["role"] == "assistant":
+                    parsed = self.parser.parse(message["content"][0]["text"])
+                    if hasattr(parsed, "tool") and parsed.tool is not None:
+                        return True
+            return False
+
         def check_execution(conversation):
             """
             Returns the ratio of successful tool executions to total attempts.
@@ -291,13 +328,120 @@ class AOKVQAToolEnv(ToolVisionEnv):
 
             return [1.0 if result else 0.0 for result in correctness_results]
 
+        def combined_tool_correctness_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ) -> list[float]:
+            """
+            Reward function that checks if tools were executed successfully only if tool use is necessary to answer the question.
+            """
+            if self.num_generations != len(prompts) or self.num_generations != len(
+                completions_messages
+            ):
+                raise ValueError(
+                    f"Expected num_generations to be equal to the number of prompts and completions, but got num_generations={self.num_generations}, len(prompts)={len(prompts)}, len(completions_messages)={len(completions_messages)}"
+                )
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            # For each response sampled, check if the completion has the correct answer
+            correct_answers = kwargs["multiple_choice_answer"]
+            correctness_results: list[bool] = [
+                check_correctness(conv, correct_answer)
+                for conv, correct_answer in zip(
+                    merged_completion_conversations, correct_answers
+                )
+            ]
+            # For each response sampled, check if the any tool use is correct
+            tool_use_correctness: list[bool] = [
+                check_execution(conv) > 0.0 for conv in merged_completion_conversations
+            ]
+            # For each response sampled, check if the model attempts to use any tool
+            tool_use_attempts: list[bool] = [
+                check_tool_use_attempt(conv) for conv in merged_completion_conversations
+            ]
+
+            # For all responses sampled, check if there is a completion that has the correct answer successfully using a tool
+            correct_with_tool = any(
+                correctness_results[i] and tool_use_correctness[i]
+                for i in range(len(correctness_results))
+            )
+            # For all responses sampled, check if there is a completion that has the correct answer without successfully using a tool
+            correct_without_tool = any(
+                correctness_results[i] and not tool_use_correctness[i]
+                for i in range(len(correctness_results))
+            )
+
+            if correct_without_tool:
+                # If the question is answerable without using a tool, the model will be penalized for using a tool
+                rewards = [
+                    0.0
+                    if not correctness_results[i]
+                    else (0.5 if tool_use_attempts[i] else 1.0)
+                    for i in range(len(correctness_results))
+                ]
+            elif correct_with_tool:
+                # The model is only rewarded if the tool use used correctly, AND the answer is correct
+                rewards = [
+                    1.0 if correctness_results[i] and tool_use_correctness[i] else 0.0
+                    for i in range(len(correctness_results))
+                ]
+            else:
+                # The model is not rewarded for any incorrect responses
+                rewards = [0.0 for _ in range(len(correctness_results))]
+            return rewards
+
         return [
             format_reward_func,
             tool_execution_reward_func,
             correct_answer_reward_func,
+            combined_tool_correctness_reward_func,
         ]
+
+    def log_metrics(self, conversations, completions_text, completion_messages):
+        # 1. compute how many completions attempt to use any tool
+        # 2. for each tool, compute how many completions attempt to use it
+
+        completions_with_tool_use = 0
+        completions_with_zoom_use = 0
+        completions_with_detect_objects_use = 0
+
+        for completion in completions_text:
+            tool_use_regex = r"<tool>(.*?)</tool>"
+            zoom_use_string = "name: zoom"
+            detect_objects_use_string = "name: detect_objects"
+
+            tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
+            if tool_matches:
+                completions_with_tool_use += 1
+                for tool_content in tool_matches:
+                    if zoom_use_string in tool_content:
+                        completions_with_zoom_use += 1
+                    if detect_objects_use_string in tool_content:
+                        completions_with_detect_objects_use += 1
+
+        print(
+            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom, and {completions_with_detect_objects_use} of which attempt to use detect_objects"
+        )
+
+        num_completions = len(completions_text)
+        tool_use_proportion = completions_with_tool_use / num_completions
+        zoom_use_proportion = completions_with_zoom_use / num_completions
+        detect_objects_use_proportion = (
+            completions_with_detect_objects_use / num_completions
+        )
+
+        return {
+            "tool_use_proportion": tool_use_proportion,
+            "zoom_use_proportion": zoom_use_proportion,
+            "detect_objects_use_proportion": detect_objects_use_proportion,
+        }
 
 
 if __name__ == "__main__":
     env = AOKVQAToolEnv(processing_class=None)
     train_dataset, val_dataset, test_dataset = env.get_dataset()
+    import ipdb
+
+    ipdb.set_trace()
+    print("hi")

@@ -1,4 +1,5 @@
 import inspect
+import random
 import traceback
 from typing import Any, Callable, Dict, List
 
@@ -147,12 +148,8 @@ class ToolVisionEnv(MultistepVisionEnv):
             # Schema inference still uses the tool function's signature/docstring
             self.tool_schemas.append(infer_schema_from_function(tool_func))
 
-        # Format the system prompt with tool descriptions
-        tool_descriptions = format_tool_descriptions(self.tool_schemas)
-        formatted_prompt = tool_prompt_template.format(
-            tool_descriptions=tool_descriptions
-        )
-        self.formatted_prompt = formatted_prompt
+        # Store the template for dynamic formatting later
+        self.tool_prompt_template = tool_prompt_template
 
         # Set the general parser (use internal default if none provided)
         self.general_parser = general_parser or self._general_parse_key_value
@@ -188,11 +185,23 @@ class ToolVisionEnv(MultistepVisionEnv):
                 if not messages or messages[0]["role"] != "system":
                     raise ValueError("Expected first message to be a system message")
 
+                # Create a shuffled copy of tool schemas for this sample
+                shuffled_schemas = self.tool_schemas[:]  # Create a copy
+                random.shuffle(shuffled_schemas)
+
+                # Format tool descriptions with the shuffled order
+                tool_descriptions = format_tool_descriptions(shuffled_schemas)
+
+                # Format the prompt template with the randomized descriptions
+                formatted_prompt = self.tool_prompt_template.format(
+                    tool_descriptions=tool_descriptions
+                )
+
                 # Replace the content of the system message with the formatted prompt
                 messages[0]["content"] = [
                     {
                         "type": "text",
-                        "text": self.formatted_prompt,
+                        "text": formatted_prompt,
                     }
                 ]
 
