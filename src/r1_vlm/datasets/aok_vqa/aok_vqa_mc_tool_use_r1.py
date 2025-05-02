@@ -30,16 +30,19 @@ def generate_r1_messages(example):
 
     choices_str = "Possible answers: "
     for i, choice in enumerate(choices):
-        if i == len(choices) - 1:
-            choices_str += f"or {choice}."
-        else:
-            choices_str += f"{choice}, "
+        choices_str += f"{i + 1}. {choice}\n"
 
-    instruction = f"""
+    instruction = f"""  
+    While thinking, please do the following:
+    1. Identify relevant visual evidence from the image to help answer the question. Tools are available to help you with this task if needed.
+    2. Recall relevant non-visual evidence from your knowledge of the world to help answer the question.
+    3. Combine these datapoints, and consider the merits of all 4 possible answers.
+    4. Select the best answer from the 4 choices.
+    
     Question: {question}
 
-    {choices_str} You must choose one to answer the question and place in <answer> tags. 
-        
+    {choices_str}
+    
     The image size is {image_size}.
     """
 
@@ -66,7 +69,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> ",
+                    "text": "\n<think> Let me think step by step.",
                 }
             ],
         },
