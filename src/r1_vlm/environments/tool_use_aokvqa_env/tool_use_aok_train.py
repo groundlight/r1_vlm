@@ -14,7 +14,7 @@ os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
 
 
 def load_model_and_processor(
-    model_name_or_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
+    model_name_or_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
     gradient_checkpointing: bool = True,
     use_peft: bool = False,
 ):
@@ -106,7 +106,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-pure-tool-use-alignment-may1",
+        output_dir="vlm-r1-pure-tool-use-alignment-may1-7B-zoom-only",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -115,10 +115,10 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=10,
+        save_total_limit=5,
         num_train_epochs=1,
         per_device_train_batch_size=2,
-        num_generations=6,
+        num_generations=12,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -135,7 +135,7 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:3",
+        vllm_device="cuda:6",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
@@ -162,3 +162,4 @@ if __name__ == "__main__":
     train()
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py

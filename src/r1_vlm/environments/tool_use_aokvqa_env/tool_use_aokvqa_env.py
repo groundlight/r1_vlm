@@ -3,6 +3,8 @@ from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
     create_r1_aok_vqa_tool_use_dataset,
@@ -12,14 +14,10 @@ from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.object_detection import (
     ObjectDetectionTool,
-    detect_objects,
-    parse_detect_objects_args,
     set_object_detection_tool,
 )
 from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 # This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
 od_tool = ObjectDetectionTool()
@@ -32,7 +30,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
         processing_class: AutoProcessor,
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
-            (detect_objects, parse_detect_objects_args),
+            #  (detect_objects, parse_detect_objects_args),
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
