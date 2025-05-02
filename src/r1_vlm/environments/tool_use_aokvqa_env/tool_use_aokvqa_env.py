@@ -118,16 +118,16 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
-                schedule = create_linear_decay_schedule(1.0, 0.0, 200)
+                schedule = create_linear_decay_schedule(1.0, 0.0, 200) if not self.use_combined_tool_correctness_reward else 0.0
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
                 # consistent high reward for getting the answer right
-                schedule = 1.0
+                schedule = 1.0 if not self.use_combined_tool_correctness_reward else 0.0
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "combined_tool_correctness_reward_func":
                 # consistent high reward for getting the answer right
-                schedule = 1.0
+                schedule = 1.0 if self.use_combined_tool_correctness_reward else 0.0
                 reward_weights.append(schedule)
             else:
                 raise ValueError(
@@ -371,17 +371,12 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 rewards = [0.0 for _ in range(len(correctness_results))]
             return rewards
 
-        if self.use_combined_tool_correctness_reward:
-            return [
-                format_reward_func,
-                combined_tool_correctness_reward_func,
-            ]
-        else:
-            return [
-                format_reward_func,
-                tool_execution_reward_func,
-                correct_answer_reward_func,
-            ]
+        return [
+            format_reward_func,
+            tool_execution_reward_func,
+            correct_answer_reward_func,
+            combined_tool_correctness_reward_func,
+        ]
 
     def log_metrics(self, conversations, completions_text, completion_messages):
         # 1. compute how many completions attempt to use any tool
