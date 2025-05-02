@@ -33,12 +33,6 @@ def generate_r1_messages(example):
         choices_str += f"{i + 1}. {choice}\n"
 
     instruction = f"""  
-    While thinking, please do the following:
-    1. Identify relevant visual evidence from the image to help answer the question. Tools are available to help you with this task if needed.
-    2. Recall relevant non-visual evidence from your knowledge of the world to help answer the question.
-    3. Combine these datapoints, and consider the merits of all 4 possible answers.
-    4. Select the best answer from the 4 choices.
-    
     Question: {question}
 
     {choices_str}

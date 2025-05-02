@@ -14,7 +14,7 @@ os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
 
 
 def load_model_and_processor(
-    model_name_or_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+    model_name_or_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
     gradient_checkpointing: bool = True,
     use_peft: bool = False,
 ):
@@ -106,7 +106,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-pure-tool-use-alignment-may1-7B-zoom-only",
+        output_dir="vlm-r1-small-tool-reward-alignment-may1-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -118,7 +118,7 @@ def train():
         save_total_limit=5,
         num_train_epochs=1,
         per_device_train_batch_size=2,
-        num_generations=12,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -126,7 +126,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.0001,
+        beta=1e-5 if peft_config is not None else 0.001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,
@@ -135,11 +135,12 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:6",
+        vllm_device="cuda:3",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
-        epsilon_high=0.28,
+        # TODO: reduce to 0.28
+        epsilon_high=0.35,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
     )

@@ -11,12 +11,15 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.object_detection import (
     ObjectDetectionTool,
+    detect_objects,
+    parse_detect_objects_args,
     set_object_detection_tool,
 )
-from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
 # This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
@@ -30,11 +33,11 @@ class AOKVQAToolEnv(ToolVisionEnv):
         processing_class: AutoProcessor,
         dataset_name: str = "Groundlight/real-iad-toy-brick-tool-use-r1",
         tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
-            #  (detect_objects, parse_detect_objects_args),
+            (detect_objects, parse_detect_objects_args),
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
-        tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
     ):
         super().__init__(
             processing_class=processing_class,
@@ -108,12 +111,14 @@ class AOKVQAToolEnv(ToolVisionEnv):
         reward_weights = []
         for reward_function in reward_functions:
             if reward_function.__name__ == "format_reward_func":
-                # consistent small reward for formatting properly
-                schedule = 0.1
+                schedule = 1.0
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                # no reward for tool execution, but we keep the func as a signal to monitor
-                schedule = 0.0
+                schedule = create_linear_decay_schedule(
+                    start_val=1.0,
+                    end_val=0.0,
+                    n_steps=50,
+                )
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
