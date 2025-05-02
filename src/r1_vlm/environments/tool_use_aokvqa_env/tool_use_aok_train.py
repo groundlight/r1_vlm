@@ -112,7 +112,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-od-tool-fixed-reward-schedule-for-tools-apr-30",
+        output_dir="vlm-r1-new-fancy-tool-aligned-reward-may1",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
