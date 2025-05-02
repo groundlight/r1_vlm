@@ -38,6 +38,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
         ],
         max_steps: int = 3,
         tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
+        num_generations: int = 6,
         use_combined_tool_correctness_reward: bool = False,
     ):
         super().__init__(
@@ -54,6 +55,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ("answer", ["answer"]),
             ("tool", ["tool"]),
         ]
+        self.num_generations = num_generations
         self.use_combined_tool_correctness_reward = use_combined_tool_correctness_reward
 
     def parse(self, text: str, strip: bool = True):
@@ -327,6 +329,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
             """
             Reward function that checks if tools were executed successfully only if tool use is necessary to answer the question.
             """
+            if self.num_generations != len(prompts) or self.num_generations != len(completions_messages):
+                raise ValueError(f"Expected num_generations to be equal to the number of prompts and completions, but got num_generations={self.num_generations}, len(prompts)={len(prompts)}, len(completions_messages)={len(completions_messages)}")
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )

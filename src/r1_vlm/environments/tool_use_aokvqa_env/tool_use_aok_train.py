@@ -92,8 +92,14 @@ def train():
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
     print("loaded model")
+    num_generations = 6
 
-    vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
+    vf_env = AOKVQAToolEnv(
+        processing_class=processor,
+        max_steps=3,
+        num_generations=num_generations,
+        use_combined_tool_correctness_reward=True,
+    )
 
     print("loaded env")
 
