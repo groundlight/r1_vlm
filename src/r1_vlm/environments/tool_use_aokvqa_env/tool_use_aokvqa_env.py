@@ -19,7 +19,7 @@ from r1_vlm.tools.object_detection import (
     parse_detect_objects_args,
     set_object_detection_tool,
 )
-from r1_vlm.tools.tool_prompts import SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
 # This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
@@ -37,7 +37,7 @@ class AOKVQAToolEnv(ToolVisionEnv):
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
-        tool_prompt_template: str = SINGLE_OPTIONAL_TOOL_PROMPT_TEMPLATE,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
         num_generations: int = 6,
         use_combined_tool_correctness_reward: bool = False,
     ):
@@ -120,7 +120,12 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # linearly decay from 1.0 to 0.0 over 200 global steps (200 gradient updates)
-                schedule = create_linear_decay_schedule(1.0, 0.0, 200) if not self.use_combined_tool_correctness_reward else 0.0
+                schedule = (
+                    create_linear_decay_schedule(1.0, 0.0, 200)
+                    if not self.use_combined_tool_correctness_reward
+                    # quick burst of reward for tool use at the beginning to teach the model to use tools
+                    else create_linear_decay_schedule(1.0, 0.0, 50)
+                )
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
@@ -329,8 +334,12 @@ class AOKVQAToolEnv(ToolVisionEnv):
             """
             Reward function that checks if tools were executed successfully only if tool use is necessary to answer the question.
             """
-            if self.num_generations != len(prompts) or self.num_generations != len(completions_messages):
-                raise ValueError(f"Expected num_generations to be equal to the number of prompts and completions, but got num_generations={self.num_generations}, len(prompts)={len(prompts)}, len(completions_messages)={len(completions_messages)}")
+            if self.num_generations != len(prompts) or self.num_generations != len(
+                completions_messages
+            ):
+                raise ValueError(
+                    f"Expected num_generations to be equal to the number of prompts and completions, but got num_generations={self.num_generations}, len(prompts)={len(prompts)}, len(completions_messages)={len(completions_messages)}"
+                )
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
             )
@@ -353,15 +362,22 @@ class AOKVQAToolEnv(ToolVisionEnv):
             ]
 
             # For all responses sampled, check if there is a completion that has the correct answer successfully using a tool
-            correct_with_tool = any(correctness_results[i] and tool_use_correctness[i] for i in range(len(correctness_results)))
+            correct_with_tool = any(
+                correctness_results[i] and tool_use_correctness[i]
+                for i in range(len(correctness_results))
+            )
             # For all responses sampled, check if there is a completion that has the correct answer without successfully using a tool
-            correct_without_tool = any(correctness_results[i] and not tool_use_correctness[i] for i in range(len(correctness_results)))
+            correct_without_tool = any(
+                correctness_results[i] and not tool_use_correctness[i]
+                for i in range(len(correctness_results))
+            )
 
             if correct_without_tool:
                 # If the question is answerable without using a tool, the model will be penalized for using a tool
                 rewards = [
-                    0.0 if not correctness_results[i] else 
-                    (0.5 if tool_use_attempts[i] else 1.0)
+                    0.0
+                    if not correctness_results[i]
+                    else (0.5 if tool_use_attempts[i] else 1.0)
                     for i in range(len(correctness_results))
                 ]
             elif correct_with_tool:
