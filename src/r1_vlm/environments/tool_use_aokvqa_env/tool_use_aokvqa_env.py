@@ -11,7 +11,6 @@ from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.environments.reward_schedules import create_linear_decay_schedule
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.object_detection import (
     ObjectDetectionTool,
@@ -114,11 +113,8 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 schedule = 1.0
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                schedule = create_linear_decay_schedule(
-                    start_val=1.0,
-                    end_val=0.0,
-                    n_steps=50,
-                )
+                # no reward for tool execution
+                schedule = 0.0
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
