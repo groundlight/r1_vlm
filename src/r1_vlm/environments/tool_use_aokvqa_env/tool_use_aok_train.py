@@ -14,7 +14,7 @@ os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
 
 
 def load_model_and_processor(
-    model_name_or_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
+    model_name_or_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
     gradient_checkpointing: bool = True,
     use_peft: bool = False,
 ):
@@ -106,7 +106,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-no-tool-reward-may2-3B",
+        output_dir="vlm-r1-no-tool-reward-may3-7B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -115,7 +115,7 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=5,
+        save_total_limit=10,
         num_train_epochs=1,
         per_device_train_batch_size=2,
         num_generations=6,

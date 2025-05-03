@@ -150,8 +150,8 @@ def zoom(
     # size we will crop to
     target_size = 250
 
-    # we will resize the image to the smaller dimension of the input image
-    resize_size = min(width, height)
+    # we will resize the image to the larger dimension of the input image, or 400 if it's a smaller image
+    resize_size = max(width, height, 400)
 
     # Validate keypoint and calculate crop box using the helper function
     # ValueError will be raised by the helper if keypoint is invalid
@@ -160,7 +160,7 @@ def zoom(
     # crop the image to the calculated box
     cropped_image = image.crop(crop_box)
 
-    # Resize the cropped image to the fixed target size
+    # Resize the cropped image to the target size
     output_image = cropped_image.resize(
         (resize_size, resize_size), Image.Resampling.LANCZOS
     )
