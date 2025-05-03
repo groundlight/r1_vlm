@@ -275,7 +275,7 @@ class AOKVQA_DA_ToolEnv(ToolVisionEnv):
             text = conversation[-1]["content"][0]["text"]
 
             parsed = self.parser.parse(text)
-            if hasattr(parsed, "answer"):
+            if hasattr(parsed, "answer") and parsed.answer is not None:
                 answer = parsed.answer
                 scores = []
                 # compute 1 - normalized edit distance between the model's answer and each of the direct answers
@@ -291,7 +291,7 @@ class AOKVQA_DA_ToolEnv(ToolVisionEnv):
                 return score
 
             else:
-                score = 0.0
+                return 0.0
 
         def correct_answer_reward_func(
             prompts, completions, completions_messages, **kwargs
