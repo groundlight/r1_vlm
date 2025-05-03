@@ -20,14 +20,14 @@ subprocess.call(f"docker pull {tag}", shell=True)
 container_id = (
     subprocess.check_output(
         # Use the absolute path here
-        f"docker run -d --gpus 0 -v {absolute_triton_repo_path}:/models -p 0.0.0.0:8000:8000 {tag} tritonserver --model-repository=/models",
+        f"docker run -d --gpus 0 -v {absolute_triton_repo_path}:/models -p 0.0.0.0:31826:31826 {tag} tritonserver --model-repository=/models --http-port=31826",
         shell=True,
     )
     .decode("utf-8")
     .strip()
 )
 
-triton_client = InferenceServerClient(url="localhost:8000", verbose=False, ssl=False)
+triton_client = InferenceServerClient(url="localhost:31826", verbose=False, ssl=False)
 
 for _ in range(10):
     with contextlib.suppress(Exception):
