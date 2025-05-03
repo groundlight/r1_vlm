@@ -118,7 +118,7 @@ def train():
         save_total_limit=10,
         num_train_epochs=1,
         per_device_train_batch_size=2,
-        num_generations=6,
+        num_generations=12,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -135,7 +135,7 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:3",
+        vllm_device="cuda:6",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
