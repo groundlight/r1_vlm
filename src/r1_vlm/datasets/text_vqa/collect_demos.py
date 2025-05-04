@@ -109,10 +109,15 @@ def display_current_example():
 
     ax.cla()  # Clear axes before drawing new image
     ax.imshow(displayed_image)
+    answers = current_example.get("answers", [])  # Get answers, default to empty list
+    answers_str = ", ".join(answers) if answers else "N/A"
     question_text = (
-        f"Q ({current_example['question_id']}): {current_example['question']}"
+        f"Q ({current_example['question_id']}): {current_example['question']}\n"
+        f"Answers: {answers_str}"
     )
-    ax.set_title(question_text, wrap=True, fontsize=10)
+    ax.set_title(
+        question_text, wrap=True, fontsize=9
+    )  # Slightly smaller font for more text
     ax.axis("off")
     plt.draw()
 
