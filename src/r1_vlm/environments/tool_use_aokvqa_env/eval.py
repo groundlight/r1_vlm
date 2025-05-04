@@ -44,7 +44,7 @@ def generate_completions(
         max_tokens=2048,
     )
 
-    batch_size = 24
+    batch_size = 12
     batches = []
 
     for example in dataset:
@@ -146,7 +146,7 @@ def evaluate(generations_dict: dict, dataset: Dataset):
 
 
 if __name__ == "__main__":
-    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-od-tool-fixed-reward-schedule-for-tools-apr-30"
+    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-no-tool-reward-may3-7B"
 
     checkpoint_paths = [
         os.path.join(checkpoints_folder, f)
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         if os.path.isdir(os.path.join(checkpoints_folder, f))
     ]
 
-    checkpoints_to_eval = ["150", "350", "600"]
+    checkpoints_to_eval = ["150"]
 
     checkpoint_paths = [
         path
