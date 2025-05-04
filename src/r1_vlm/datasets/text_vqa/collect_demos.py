@@ -242,7 +242,7 @@ def main():
 
     print("Loading TextVQA 'train' split...")
     try:
-        dataset = load_dataset("lmms-lab/textvqa", split="train")
+        dataset = load_dataset("lmms-lab/textvqa", split="train").shuffle(seed=42)
         dataset_iterator = iter(dataset)
         print("Dataset loaded.")
     except Exception as e:
