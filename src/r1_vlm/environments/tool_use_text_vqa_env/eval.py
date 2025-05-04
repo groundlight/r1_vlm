@@ -27,10 +27,15 @@ def generate_completions(
     checkpoint_path: str, file_path: str, dataset: Dataset, env, processor
 ):
     """
-    Generate completions given a checkpoint and a file path to save the generations
+    Generate completions given a checkpoint and a file path to save the generations,
+    and calculate running evaluation score.
     """
     if os.path.exists(file_path):
-        raise ValueError(f"File {file_path} already exists")
+        raise ValueError(
+            f"File {file_path} already exists. Please remove or rename it."
+        )
+    else:
+        file_mode = "w"
 
     vlm = LLM(
         model=checkpoint_path,
@@ -57,48 +62,83 @@ def generate_completions(
         else:
             batches.append([example])
 
-    generations = []
-    for batch in tqdm(batches, desc="Generating completions"):
-        conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
-            inputs=batch, processing_class=processor
-        )
+    # Initialize evaluation counters
+    total_evaluated = 0
+    correct_evaluated = 0.0  # Use float for potentially fractional scores
 
-        completion_ids = env.generate(
-            conversations=conversations,
-            vlm_inputs=vllm_inputs,
-            vlm=vlm,
-            sampling_params=sampling_params,
-        )
+    with open(file_path, file_mode) as f:
+        # Wrap batches with tqdm for progress bar
+        pbar = tqdm(batches, desc="Generating completions")
+        for batch in pbar:
+            conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
+                inputs=batch, processing_class=processor
+            )
 
-        generated_texts = processor.batch_decode(
-            completion_ids["ids"],
-            skip_special_tokens=False,
-            clean_up_tokenization_spaces=False,
-        )
+            completion_ids = env.generate(
+                conversations=conversations,
+                vlm_inputs=vllm_inputs,
+                vlm=vlm,
+                sampling_params=sampling_params,
+            )
 
-        for example, generation in zip(batch, generated_texts):
-            data = {
-                "question_id": example["question_id"],
-                "question": example["question"],
-                "answers": example["answers"],
-                "generation": generation,
-                "model_answer": extract_answer(generation),
-            }
-            generations.append(data)
+            generated_texts = processor.batch_decode(
+                completion_ids["ids"],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
 
-    with open(file_path, "w") as f:
-        json.dump(generations, f, indent=2)
+            batch_results = []
+            for example, generation in zip(batch, generated_texts):
+                model_answer = extract_answer(generation)
+                correct_answers = example["answers"]
+
+                # Perform normalization and scoring for incremental evaluation
+                norm_model_answer, norm_correct_answers = normalize_answer(
+                    model_answer, correct_answers
+                )
+                num_matches = sum(
+                    1 for ca in norm_correct_answers if ca == norm_model_answer
+                )
+                score = min(1.0, num_matches / 3.0)  # Ensure float division and score
+
+                total_evaluated += 1
+                correct_evaluated += score
+
+                # Prepare data for saving
+                data = {
+                    "question_id": example["question_id"],
+                    "question": example["question"],
+                    "answers": example["answers"],
+                    "generation": generation,
+                    "model_answer": model_answer,  # Use the non-normalized one for saving
+                }
+                # Write each generation as a JSON line
+                f.write(json.dumps(data) + "\n")
+
+            # Update progress bar with running accuracy after each batch
+            running_accuracy = (
+                correct_evaluated / total_evaluated if total_evaluated > 0 else 0.0
+            )
+            pbar.set_description(
+                f"Generating completions | Running Acc: {running_accuracy:.4f}"
+            )
+
+    print(
+        f"\nFinal Incremental Accuracy: {running_accuracy:.4f}"
+    )  # Print final running accuracy
 
 
-def evaluate(generations_dict: dict, dataset: Dataset):
-    with open(generations_dict, "r") as f:
-        generations = json.load(f)
-
+def evaluate(generations_path: str, dataset: Dataset):
     generations_dict = {}
-    for generation in generations:
-        if generation["question_id"] in generations_dict:
-            raise ValueError(f"Duplicate question_id: {generation['question_id']}")
-        generations_dict[generation["question_id"]] = generation
+    with open(generations_path, "r") as f:
+        for line in f:
+            if line.strip():
+                generation = json.loads(line)
+                if generation["question_id"] in generations_dict:
+                    print(
+                        f"Warning: Duplicate question_id found: {generation['question_id']}. Keeping the last one."
+                    )
+                generations_dict[generation["question_id"]] = generation
 
     total = 0
     correct = 0
