@@ -217,7 +217,12 @@ class MultistepVisionEnv(Environment):
             "Full conversation 0:\n" + json.dumps(cleaned_messages, indent=4)
         )
         for image in images:
-            imgcat.imgcat(image)
+            try:
+                imgcat.imgcat(image)
+            except Exception as e:
+                print(
+                    f"Caught failed imgcat call for image. As this is just a debugging print, we will not raise an error. {e}"
+                )
 
         return output
 
