@@ -148,7 +148,7 @@ def zoom(
 
     width, height = image.size
     # size we will crop to
-    target_size = 250
+    target_size = 300
 
     # we will resize the image to the larger dimension of the input image, or 400 if it's a smaller image
     resize_size = max(width, height, 400)

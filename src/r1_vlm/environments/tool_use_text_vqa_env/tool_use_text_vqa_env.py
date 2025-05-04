@@ -15,6 +15,171 @@ from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
+# Implementing the exact preprocessing steps that are used in text vqa evaluation
+# https://github.com/GT-Vision-Lab/VQA/blob/master/PythonEvaluationTools/vqaEvaluation/vqaEval.py#L11
+contractions = {
+    "aint": "ain't",
+    "arent": "aren't",
+    "cant": "can't",
+    "couldve": "could've",
+    "couldnt": "couldn't",
+    "couldn'tve": "couldn't've",
+    "couldnt've": "couldn't've",
+    "didnt": "didn't",
+    "doesnt": "doesn't",
+    "dont": "don't",
+    "hadnt": "hadn't",
+    "hadnt've": "hadn't've",
+    "hadn'tve": "hadn't've",
+    "hasnt": "hasn't",
+    "havent": "haven't",
+    "hed": "he'd",
+    "hed've": "he'd've",
+    "he'dve": "he'd've",
+    "hes": "he's",
+    "howd": "how'd",
+    "howll": "how'll",
+    "hows": "how's",
+    "Id've": "I'd've",
+    "I'dve": "I'd've",
+    "Im": "I'm",
+    "Ive": "I've",
+    "isnt": "isn't",
+    "itd": "it'd",
+    "itd've": "it'd've",
+    "it'dve": "it'd've",
+    "itll": "it'll",
+    "let's": "let's",
+    "maam": "ma'am",
+    "mightnt": "mightn't",
+    "mightnt've": "mightn't've",
+    "mightn'tve": "mightn't've",
+    "mightve": "might've",
+    "mustnt": "mustn't",
+    "mustve": "must've",
+    "neednt": "needn't",
+    "notve": "not've",
+    "oclock": "o'clock",
+    "oughtnt": "oughtn't",
+    "ow's'at": "'ow's'at",
+    "'ows'at": "'ow's'at",
+    "'ow'sat": "'ow's'at",
+    "shant": "shan't",
+    "shed've": "she'd've",
+    "she'dve": "she'd've",
+    "she's": "she's",
+    "shouldve": "should've",
+    "shouldnt": "shouldn't",
+    "shouldnt've": "shouldn't've",
+    "shouldn'tve": "shouldn't've",
+    "somebody'd": "somebodyd",
+    "somebodyd've": "somebody'd've",
+    "somebody'dve": "somebody'd've",
+    "somebodyll": "somebody'll",
+    "somebodys": "somebody's",
+    "someoned": "someone'd",
+    "someoned've": "someone'd've",
+    "someone'dve": "someone'd've",
+    "someonell": "someone'll",
+    "someones": "someone's",
+    "somethingd": "something'd",
+    "somethingd've": "something'd've",
+    "something'dve": "something'd've",
+    "somethingll": "something'll",
+    "thats": "that's",
+    "thered": "there'd",
+    "thered've": "there'd've",
+    "there'dve": "there'd've",
+    "therere": "there're",
+    "theres": "there's",
+    "theyd": "they'd",
+    "theyd've": "they'd've",
+    "they'dve": "they'd've",
+    "theyll": "they'll",
+    "theyre": "they're",
+    "theyve": "they've",
+    "twas": "'twas",
+    "wasnt": "wasn't",
+    "wed've": "we'd've",
+    "we'dve": "we'd've",
+    "weve": "we've",
+    "werent": "weren't",
+    "whatll": "what'll",
+    "whatre": "what're",
+    "whats": "what's",
+    "whatve": "what've",
+    "whens": "when's",
+    "whered": "where'd",
+    "wheres": "where's",
+    "whereve": "where've",
+    "whod": "who'd",
+    "whod've": "who'd've",
+    "who'dve": "who'd've",
+    "wholl": "who'll",
+    "whos": "who's",
+    "whove": "who've",
+    "whyll": "why'll",
+    "whyre": "why're",
+    "whys": "why's",
+    "wont": "won't",
+    "wouldve": "would've",
+    "wouldnt": "wouldn't",
+    "wouldnt've": "wouldn't've",
+    "wouldn'tve": "wouldn't've",
+    "yall": "y'all",
+    "yall'll": "y'all'll",
+    "y'allll": "y'all'll",
+    "yall'd've": "y'all'd've",
+    "y'alld've": "y'all'd've",
+    "y'all'dve": "y'all'd've",
+    "youd": "you'd",
+    "youd've": "you'd've",
+    "you'dve": "you'd've",
+    "youll": "you'll",
+    "youre": "you're",
+    "youve": "you've",
+}
+manualMap = {
+    "none": "0",
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+}
+articles = ["a", "an", "the"]
+periodStrip = re.compile("(?!<=\d)(\.)(?!\d)")
+commaStrip = re.compile("(\d)(\,)(\d)")
+punct = [
+    ";",
+    r"/",
+    "[",
+    "]",
+    '"',
+    "{",
+    "}",
+    "(",
+    ")",
+    "=",
+    "+",
+    "\\",
+    "_",
+    "-",
+    ">",
+    "<",
+    "@",
+    "`",
+    ",",
+    "?",
+    "!",
+]
+
 
 class TextVQAToolEnv(ToolVisionEnv):
     def __init__(
@@ -40,171 +205,6 @@ class TextVQAToolEnv(ToolVisionEnv):
             ("think", ["think"]),
             ("answer", ["answer"]),
             ("tool", ["tool"]),
-        ]
-
-        # Implementing the exact preprocessing steps that are used in text vqa evaluation
-        # https://github.com/GT-Vision-Lab/VQA/blob/master/PythonEvaluationTools/vqaEvaluation/vqaEval.py#L11
-        self.contractions = {
-            "aint": "ain't",
-            "arent": "aren't",
-            "cant": "can't",
-            "couldve": "could've",
-            "couldnt": "couldn't",
-            "couldn'tve": "couldn't've",
-            "couldnt've": "couldn't've",
-            "didnt": "didn't",
-            "doesnt": "doesn't",
-            "dont": "don't",
-            "hadnt": "hadn't",
-            "hadnt've": "hadn't've",
-            "hadn'tve": "hadn't've",
-            "hasnt": "hasn't",
-            "havent": "haven't",
-            "hed": "he'd",
-            "hed've": "he'd've",
-            "he'dve": "he'd've",
-            "hes": "he's",
-            "howd": "how'd",
-            "howll": "how'll",
-            "hows": "how's",
-            "Id've": "I'd've",
-            "I'dve": "I'd've",
-            "Im": "I'm",
-            "Ive": "I've",
-            "isnt": "isn't",
-            "itd": "it'd",
-            "itd've": "it'd've",
-            "it'dve": "it'd've",
-            "itll": "it'll",
-            "let's": "let's",
-            "maam": "ma'am",
-            "mightnt": "mightn't",
-            "mightnt've": "mightn't've",
-            "mightn'tve": "mightn't've",
-            "mightve": "might've",
-            "mustnt": "mustn't",
-            "mustve": "must've",
-            "neednt": "needn't",
-            "notve": "not've",
-            "oclock": "o'clock",
-            "oughtnt": "oughtn't",
-            "ow's'at": "'ow's'at",
-            "'ows'at": "'ow's'at",
-            "'ow'sat": "'ow's'at",
-            "shant": "shan't",
-            "shed've": "she'd've",
-            "she'dve": "she'd've",
-            "she's": "she's",
-            "shouldve": "should've",
-            "shouldnt": "shouldn't",
-            "shouldnt've": "shouldn't've",
-            "shouldn'tve": "shouldn't've",
-            "somebody'd": "somebodyd",
-            "somebodyd've": "somebody'd've",
-            "somebody'dve": "somebody'd've",
-            "somebodyll": "somebody'll",
-            "somebodys": "somebody's",
-            "someoned": "someone'd",
-            "someoned've": "someone'd've",
-            "someone'dve": "someone'd've",
-            "someonell": "someone'll",
-            "someones": "someone's",
-            "somethingd": "something'd",
-            "somethingd've": "something'd've",
-            "something'dve": "something'd've",
-            "somethingll": "something'll",
-            "thats": "that's",
-            "thered": "there'd",
-            "thered've": "there'd've",
-            "there'dve": "there'd've",
-            "therere": "there're",
-            "theres": "there's",
-            "theyd": "they'd",
-            "theyd've": "they'd've",
-            "they'dve": "they'd've",
-            "theyll": "they'll",
-            "theyre": "they're",
-            "theyve": "they've",
-            "twas": "'twas",
-            "wasnt": "wasn't",
-            "wed've": "we'd've",
-            "we'dve": "we'd've",
-            "weve": "we've",
-            "werent": "weren't",
-            "whatll": "what'll",
-            "whatre": "what're",
-            "whats": "what's",
-            "whatve": "what've",
-            "whens": "when's",
-            "whered": "where'd",
-            "wheres": "where's",
-            "whereve": "where've",
-            "whod": "who'd",
-            "whod've": "who'd've",
-            "who'dve": "who'd've",
-            "wholl": "who'll",
-            "whos": "who's",
-            "whove": "who've",
-            "whyll": "why'll",
-            "whyre": "why're",
-            "whys": "why's",
-            "wont": "won't",
-            "wouldve": "would've",
-            "wouldnt": "wouldn't",
-            "wouldnt've": "wouldn't've",
-            "wouldn'tve": "wouldn't've",
-            "yall": "y'all",
-            "yall'll": "y'all'll",
-            "y'allll": "y'all'll",
-            "yall'd've": "y'all'd've",
-            "y'alld've": "y'all'd've",
-            "y'all'dve": "y'all'd've",
-            "youd": "you'd",
-            "youd've": "you'd've",
-            "you'dve": "you'd've",
-            "youll": "you'll",
-            "youre": "you're",
-            "youve": "you've",
-        }
-        self.manualMap = {
-            "none": "0",
-            "zero": "0",
-            "one": "1",
-            "two": "2",
-            "three": "3",
-            "four": "4",
-            "five": "5",
-            "six": "6",
-            "seven": "7",
-            "eight": "8",
-            "nine": "9",
-            "ten": "10",
-        }
-        self.articles = ["a", "an", "the"]
-        self.periodStrip = re.compile("(?!<=\d)(\.)(?!\d)")
-        self.commaStrip = re.compile("(\d)(\,)(\d)")
-        self.punct = [
-            ";",
-            r"/",
-            "[",
-            "]",
-            '"',
-            "{",
-            "}",
-            "(",
-            ")",
-            "=",
-            "+",
-            "\\",
-            "_",
-            "-",
-            ">",
-            "<",
-            "@",
-            "`",
-            ",",
-            "?",
-            "!",
         ]
 
     def parse(self, text: str, strip: bool = True):
@@ -437,7 +437,15 @@ class TextVQAToolEnv(ToolVisionEnv):
             else:
                 return 0.0
 
+            print(
+                f"before normalization, answer: {answer}, correct_answers: {correct_answers}"
+            )
+
             answer, correct_answers = normalize_answer(answer, correct_answers)
+
+            print(
+                f"after normalization, answer: {answer}, correct_answers: {correct_answers}"
+            )
 
             # check how many correct answers match the given answer
             num_matches = sum(
@@ -447,65 +455,65 @@ class TextVQAToolEnv(ToolVisionEnv):
             score = min(1, num_matches / 3)
             return score
 
-        def normalize_answer(answer, correct_answers):
+        def normalize_answer(model_answer, correct_answers):
             """
             implements the normalization logic from the text vqa eval that normalizes the answer and correct answers
             """
             # always remove new lines from the answer and correct answers
-            answer = answer.replace("\n", " ")
+            model_answer = model_answer.replace("\n", " ")
             correct_answers = [answer.replace("\n", " ") for answer in correct_answers]
 
             # always remote "\t" from the answer and correct answers
-            answer = answer.replace("\t", " ")
+            model_answer = model_answer.replace("\t", " ")
             correct_answers = [answer.replace("\t", " ") for answer in correct_answers]
 
             # always strip answer and correct answers
-            answer = answer.strip()
+            model_answer = model_answer.strip()
             correct_answers = [answer.strip() for answer in correct_answers]
 
             # if there is only one correct answer, we're done
             if len(set(correct_answers)) == 1:
-                return answer, correct_answers
+                return model_answer, correct_answers
 
             # otherwise we get more normalization, first process punctuation
             correct_answers = [
-                self.process_punctuation(answer) for answer in correct_answers
+                process_punctuation(answer) for answer in correct_answers
             ]
-            answer = self.process_punctuation(answer)
+            model_answer = process_punctuation(model_answer)
 
             # then process digit articles
             correct_answers = [
-                self.process_digit_articles(answer) for answer in correct_answers
+                process_digit_articles(answer) for answer in correct_answers
             ]
-            answer = self.process_digit_articles(answer)
+            model_answer = process_digit_articles(model_answer)
 
-            return answer, correct_answers
+            return model_answer, correct_answers
 
         # "process" functions are copy pasted from the text vqa eval directly
-        def process_punctuation(self, inText):
+        def process_punctuation(inText):
             outText = inText
-            for p in self.punct:
+            for p in punct:
                 if (p + " " in inText or " " + p in inText) or (
-                    re.search(self.commaStrip, inText) != None
+                    re.search(commaStrip, inText) is not None
                 ):
                     outText = outText.replace(p, "")
                 else:
                     outText = outText.replace(p, " ")
-            outText = self.periodStrip.sub("", outText, re.UNICODE)
+            outText = periodStrip.sub("", outText, re.UNICODE)
             return outText
 
-        def process_digit_articles(self, inText):
+        def process_digit_articles(inText):
             outText = []
             tempText = inText.lower().split()
             for word in tempText:
-                word = self.manualMap.setdefault(word, word)
-                if word not in self.articles:
+                word = manualMap.setdefault(word, word)
+                if word not in articles:
                     outText.append(word)
                 else:
                     pass
             for wordId, word in enumerate(outText):
-                if word in self.contractions:
-                    outText[wordId] = self.contractions[word]
+                if word in contractions:
+                    outText[wordId] = contractions[word]
             outText = " ".join(outText)
             return outText
 
@@ -519,8 +527,14 @@ class TextVQAToolEnv(ToolVisionEnv):
                 prompts_messages=prompts, completions_messages=completions_messages
             )
 
-            # list of 10 responses from labelers.
-            correct_answers = kwargs["answers"]
+            # a list of lists of 10 responses from labelers. They should all be the same. Verify this, then take the first one.
+            correct_answers_lists = kwargs["answers"]
+            for correct_answers_list in correct_answers_lists:
+                if not correct_answers_list == correct_answers_lists[0]:
+                    raise ValueError(
+                        f"All correct answers lists should be the same, but got {correct_answers_list}"
+                    )
+            correct_answers = correct_answers_lists[0]
 
             correctness_rewards = []
             for conv in merged_completion_conversations:

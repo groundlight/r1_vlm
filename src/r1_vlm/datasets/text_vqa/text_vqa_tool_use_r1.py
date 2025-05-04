@@ -33,7 +33,7 @@ def generate_r1_messages(example):
     instruction = f"""
     You are answering a question from the TextVQA benchmark, where you need to read and reason about text in images to answer questions about them.
 
-    Please thouroughly think through the question and refine your answer while thinking. Then, provide your answer.
+    Please thoroughly think through the question and refine your answer while thinking. Then, provide your answer.
     Question: {question}
 
     The image size is {image_size}.
