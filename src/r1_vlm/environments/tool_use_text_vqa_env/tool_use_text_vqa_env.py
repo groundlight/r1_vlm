@@ -3,8 +3,6 @@ from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
     create_r1_text_vqa_tool_use_dataset,
@@ -14,6 +12,8 @@ from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 # Implementing the exact preprocessing steps that are used in text vqa evaluation
 # https://github.com/GT-Vision-Lab/VQA/blob/master/PythonEvaluationTools/vqaEvaluation/vqaEval.py#L11
@@ -341,6 +341,11 @@ class TextVQAToolEnv(ToolVisionEnv):
                 # consistent high reward for getting the answer right
                 schedule = 1.0
                 reward_weights.append(schedule)
+
+            elif reward_function.__name__ == "zoom_keypoint_reward_func":
+                # consistent high reward for using the zoom keypoint
+                schedule = 1.0
+                reward_weights.append(schedule)
             else:
                 raise ValueError(
                     f"Unknown reward function: {reward_function.__name__} encountered in get_reward_weights"
@@ -548,10 +553,40 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             return correctness_rewards
 
+        def zoom_keypoint_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ):
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            print(f"{prompts[0]=}")
+            print(f"{completions[0]=}")
+            print(f"{completions_messages[0]=}")
+
+            # check if the example has a zoom keypoint
+            zoom_keypoint = kwargs.get("zoom_keypoint", None)
+            if zoom_keypoint is None:
+                return [0.0] * len(merged_completion_conversations)
+
+            print(f"zoom_keypoint: {zoom_keypoint}")
+
+            # determine if each completion uses the zoom keypoint:
+            # 1. parse each assistant message for a tool call
+            # 2. check if the tool call is a zoom call: "name: zoom"
+            # 3. check for keypoint: [x, y] in the tool call, and extract it
+            # 4. If there is > 1 zoom tool call with a keypoint in a conversation, we use the first one
+            # 5. Convert both keypoints to normalized coordinates (0-1)
+            # 5. compute the normalized euclidean distance between the keypoint in the tool call and the zoom keypoint
+            # 6. Reward = 1 - distance
+
+            return [0.0] * len(merged_completion_conversations)
+
         return [
             format_reward_func,
             tool_execution_reward_func,
             correct_answer_reward_func,
+            zoom_keypoint_reward_func,
         ]
 
     def log_metrics(self, conversations, completions_text, completion_messages):
