@@ -181,6 +181,67 @@ punct = [
 ]
 
 
+def normalize_answer(model_answer, correct_answers):
+    """
+    implements the normalization logic from the text vqa eval that normalizes the answer and correct answers
+    """
+    # always remove new lines from the answer and correct answers
+    model_answer = model_answer.replace("\n", " ")
+    correct_answers = [answer.replace("\n", " ") for answer in correct_answers]
+
+    # always remote "\t" from the answer and correct answers
+    model_answer = model_answer.replace("\t", " ")
+    correct_answers = [answer.replace("\t", " ") for answer in correct_answers]
+
+    # always strip answer and correct answers
+    model_answer = model_answer.strip()
+    correct_answers = [answer.strip() for answer in correct_answers]
+
+    # if there is only one correct answer, we're done
+    if len(set(correct_answers)) == 1:
+        return model_answer, correct_answers
+
+    # otherwise we get more normalization, first process punctuation
+    correct_answers = [process_punctuation(answer) for answer in correct_answers]
+    model_answer = process_punctuation(model_answer)
+
+    # then process digit articles
+    correct_answers = [process_digit_articles(answer) for answer in correct_answers]
+    model_answer = process_digit_articles(model_answer)
+
+    return model_answer, correct_answers
+
+
+# "process" functions are copy pasted from the text vqa eval directly
+def process_punctuation(inText):
+    outText = inText
+    for p in punct:
+        if (p + " " in inText or " " + p in inText) or (
+            re.search(commaStrip, inText) is not None
+        ):
+            outText = outText.replace(p, "")
+        else:
+            outText = outText.replace(p, " ")
+    outText = periodStrip.sub("", outText, re.UNICODE)
+    return outText
+
+
+def process_digit_articles(inText):
+    outText = []
+    tempText = inText.lower().split()
+    for word in tempText:
+        word = manualMap.setdefault(word, word)
+        if word not in articles:
+            outText.append(word)
+        else:
+            pass
+    for wordId, word in enumerate(outText):
+        if word in contractions:
+            outText[wordId] = contractions[word]
+    outText = " ".join(outText)
+    return outText
+
+
 class TextVQAToolEnv(ToolVisionEnv):
     def __init__(
         self,
@@ -455,68 +516,6 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             score = min(1, num_matches / 3)
             return score
-
-        def normalize_answer(model_answer, correct_answers):
-            """
-            implements the normalization logic from the text vqa eval that normalizes the answer and correct answers
-            """
-            # always remove new lines from the answer and correct answers
-            model_answer = model_answer.replace("\n", " ")
-            correct_answers = [answer.replace("\n", " ") for answer in correct_answers]
-
-            # always remote "\t" from the answer and correct answers
-            model_answer = model_answer.replace("\t", " ")
-            correct_answers = [answer.replace("\t", " ") for answer in correct_answers]
-
-            # always strip answer and correct answers
-            model_answer = model_answer.strip()
-            correct_answers = [answer.strip() for answer in correct_answers]
-
-            # if there is only one correct answer, we're done
-            if len(set(correct_answers)) == 1:
-                return model_answer, correct_answers
-
-            # otherwise we get more normalization, first process punctuation
-            correct_answers = [
-                process_punctuation(answer) for answer in correct_answers
-            ]
-            model_answer = process_punctuation(model_answer)
-
-            # then process digit articles
-            correct_answers = [
-                process_digit_articles(answer) for answer in correct_answers
-            ]
-            model_answer = process_digit_articles(model_answer)
-
-            return model_answer, correct_answers
-
-        # "process" functions are copy pasted from the text vqa eval directly
-        def process_punctuation(inText):
-            outText = inText
-            for p in punct:
-                if (p + " " in inText or " " + p in inText) or (
-                    re.search(commaStrip, inText) is not None
-                ):
-                    outText = outText.replace(p, "")
-                else:
-                    outText = outText.replace(p, " ")
-            outText = periodStrip.sub("", outText, re.UNICODE)
-            return outText
-
-        def process_digit_articles(inText):
-            outText = []
-            tempText = inText.lower().split()
-            for word in tempText:
-                word = manualMap.setdefault(word, word)
-                if word not in articles:
-                    outText.append(word)
-                else:
-                    pass
-            for wordId, word in enumerate(outText):
-                if word in contractions:
-                    outText[wordId] = contractions[word]
-            outText = " ".join(outText)
-            return outText
 
         def correct_answer_reward_func(
             prompts, completions, completions_messages, **kwargs
