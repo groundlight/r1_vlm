@@ -601,31 +601,19 @@ class TextVQAToolEnv(ToolVisionEnv):
         tool_use_proportion = completions_with_tool_use / num_completions
         zoom_use_proportion = completions_with_zoom_use / num_completions
 
-        # I want to measure how many tool uses per completion, only including completions with at least one tool use
+        # I want to measure if any completion has more than one tool use
         tool_uses_per_completion = [
-            self.count_tool_attempts(completion) for completion in completions_text
+            self.count_tool_attempts(messages) for messages in completion_messages
         ]
 
-        total_completions_with_tool_use = sum(
-            int(tool_use > 0) for tool_use in tool_uses_per_completion
-        )
-
-        # if no completions have any tool use, return the proportions
-        if total_completions_with_tool_use == 0:
-            return {
-                "tool_use_proportion": tool_use_proportion,
-                "zoom_use_proportion": zoom_use_proportion,
-            }
-
-        # otherwise compute the average tool calls per completion among the completions that have at least one tool call
-        tool_uses_per_completion_final = (
-            sum(tool_uses_per_completion) / total_completions_with_tool_use
+        any_completion_with_more_than_one_tool_use = any(
+            tool_use > 1 for tool_use in tool_uses_per_completion
         )
 
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
-            "tool_uses_per_completion": tool_uses_per_completion_final,
+            "any_completion_with_more_than_one_tool_use": any_completion_with_more_than_one_tool_use,
         }
 
 

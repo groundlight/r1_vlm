@@ -166,9 +166,12 @@ class MultistepVisionEnv(Environment):
 
         custom_sp_last_step = custom_sp.clone()
 
+        # Use [\s\S]* to match any character including newlines
+        full_regex = r"([^<]*)</think>([^<]*)<answer>([^<]*)</answer>"
+
         guided_decoding_params = GuidedDecodingParams(
-            regex=r"^((?!<tool>).)*$"  # Matches any string not containing "<tool>"
-        )
+            regex=full_regex
+        )  # Use full_regex now
 
         custom_sp_last_step.guided_decoding = guided_decoding_params
 
@@ -195,7 +198,7 @@ class MultistepVisionEnv(Environment):
                 custom_sp if num_steps_taken < total_steps - 1 else custom_sp_last_step
             )
 
-            states = self.step(states, vlm, custom_sp)
+            states = self.step(states, vlm, sp_to_use)
             all_completed = all(state["completed"] for state in states)
             num_steps_taken += 1
 
