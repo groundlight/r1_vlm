@@ -100,7 +100,7 @@ def train():
     print("loaded env")
 
     # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"])
+    datasets = vf_env.get_dataset(splits=["train"], max_examples_per_split=100)
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
@@ -110,7 +110,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-tool-use-no-tool-reward-may4-3B",
+        output_dir="vlm-r1-text-vqa-distance-reward-may4-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -120,7 +120,7 @@ def train():
         logging_steps=1,
         save_steps=50,
         save_total_limit=10,
-        num_train_epochs=1,
+        num_train_epochs=100,
         per_device_train_batch_size=1,
         num_generations=3,
         gradient_accumulation_steps=4,
@@ -158,6 +158,8 @@ def train():
         env=vf_env,
         peft_config=peft_config,
         guided_regex=None,
+        # shuffling is disabled because we want to start with the keypoint examples.
+        shuffle_dataset=False,
     )
 
     trainer.train()

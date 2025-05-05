@@ -1,8 +1,11 @@
+import math
 import re
 from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
     create_r1_text_vqa_tool_use_dataset,
@@ -12,8 +15,6 @@ from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 # Implementing the exact preprocessing steps that are used in text vqa evaluation
 # https://github.com/GT-Vision-Lab/VQA/blob/master/PythonEvaluationTools/vqaEvaluation/vqaEval.py#L11
@@ -292,8 +293,13 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             output_datasets[split] = dataset_split
 
+        # only keep the examples with keypoints from the train set for testing
         if "train" in splits:
-            output_datasets["train"].shuffle()
+            print("Filtering train set to only include examples with zoom keypoints.")
+            output_datasets["train"] = output_datasets["train"].filter(
+                lambda x: x["zoom_keypoint"] is not None
+            )
+            print(f"After filtering, {len(output_datasets['train'])} examples remain.")
 
         return output_datasets
 
@@ -553,6 +559,17 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             return correctness_rewards
 
+        def extract_keypoint(text):
+            # Pattern to match [x, y] where x and y are integers, allowing multiline
+            pattern = r"\[\s*(\d+)\s*,\s*(\d+)\s*\]"
+            match = re.search(pattern, text, re.DOTALL)
+
+            if match:
+                x = int(match.group(1))
+                y = int(match.group(2))
+                return x, y
+            return None
+
         def zoom_keypoint_reward_func(
             prompts, completions, completions_messages, **kwargs
         ):
@@ -560,27 +577,75 @@ class TextVQAToolEnv(ToolVisionEnv):
                 prompts_messages=prompts, completions_messages=completions_messages
             )
 
-            print(f"{prompts[0]=}")
-            print(f"{completions[0]=}")
-            print(f"{completions_messages[0]=}")
+            # extract the image size from the prompt
+            prompt = prompts[0]
+            image_content = prompt[1]["content"][1]
+            image = image_content["image"]
+            image_width = image.width
+            image_height = image.height
 
-            # check if the example has a zoom keypoint
-            zoom_keypoint = kwargs.get("zoom_keypoint", None)
-            if zoom_keypoint is None:
+            # extract the zoom keypoint from the completion, if it exists
+            conv_keypoints = []
+            for conv in merged_completion_conversations:
+                keypoint_found = False
+                for msg in conv:
+                    if msg["role"] == "assistant":
+                        parsed = self.parser.parse(msg["content"][0]["text"])
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            tool_content = parsed.tool
+                            if "name: zoom" in tool_content:
+                                conv_keypoint = extract_keypoint(tool_content)
+                                conv_keypoints.append(conv_keypoint)
+                                keypoint_found = True
+                                break
+                # if no tool call with a zoom keypoint is found, append None
+                if not keypoint_found:
+                    conv_keypoints.append(None)
+
+            print(f"conv_keypoints: {conv_keypoints}")
+
+            # check if the example has a zoom keypoint - this is a list of Group size tuples, each tuple is identical
+            zoom_keypoints = kwargs.get("zoom_keypoint", None)
+
+            # if this example does not have a zoom keypoint, return 0 reward for all completions as there's no way to verify the result
+            if zoom_keypoints is None:
                 return [0.0] * len(merged_completion_conversations)
 
-            print(f"zoom_keypoint: {zoom_keypoint}")
+            zoom_keypoint = zoom_keypoints[0]
+            normalized_zoom_keypoint = (
+                zoom_keypoint[0] / image_width,
+                zoom_keypoint[1] / image_height,
+            )
+            print(f"normalized_zoom_keypoint: {normalized_zoom_keypoint}")
 
-            # determine if each completion uses the zoom keypoint:
-            # 1. parse each assistant message for a tool call
-            # 2. check if the tool call is a zoom call: "name: zoom"
-            # 3. check for keypoint: [x, y] in the tool call, and extract it
-            # 4. If there is > 1 zoom tool call with a keypoint in a conversation, we use the first one
-            # 5. Convert both keypoints to normalized coordinates (0-1)
-            # 5. compute the normalized euclidean distance between the keypoint in the tool call and the zoom keypoint
-            # 6. Reward = 1 - distance
+            normalized_conv_keypoints = []
+            for conv_keypoint in conv_keypoints:
+                if conv_keypoint is None:
+                    normalized_conv_keypoints.append(None)
+                else:
+                    normalized_conv_keypoints.append(
+                        (
+                            conv_keypoint[0] / image_width,
+                            conv_keypoint[1] / image_height,
+                        )
+                    )
 
-            return [0.0] * len(merged_completion_conversations)
+            rewards = []
+            for normalized_conv_keypoint in normalized_conv_keypoints:
+                if normalized_conv_keypoint is None:
+                    rewards.append(0.0)
+                else:
+                    # compute the normalized euclidean distance between the keypoint in the tool call and the zoom keypoint
+                    distance = math.sqrt(
+                        (normalized_conv_keypoint[0] - normalized_zoom_keypoint[0]) ** 2
+                        + (normalized_conv_keypoint[1] - normalized_zoom_keypoint[1])
+                        ** 2
+                    )
+                    # clip the reward at 0.0, as this value could be negative (1 - root 2) worst case
+                    reward = max(1 - distance, 0.0)
+                    rewards.append(reward)
+
+            return rewards
 
         return [
             format_reward_func,
