@@ -554,6 +554,28 @@ class TextVQAToolEnv(ToolVisionEnv):
             correct_answer_reward_func,
         ]
 
+    def count_tool_attempts(self, conversation):
+        """
+        Returns the number of tool attempts in the conversation.
+        """
+        tool_attempts = 0
+        successful_executions = 0
+
+        for i, message in enumerate(conversation):
+            if message["role"] == "assistant":
+                parsed = self.parser.parse(message["content"][0]["text"])
+                if hasattr(parsed, "tool") and parsed.tool is not None:
+                    tool_attempts += 1
+                    if (
+                        i + 1 < len(conversation)
+                        and conversation[i + 1]["role"] == "user"
+                    ):
+                        response = conversation[i + 1]["content"][0]["text"]
+                        if "Error:" not in response:
+                            successful_executions += 1
+
+        return tool_attempts
+
     def log_metrics(self, conversations, completions_text, completion_messages):
         # 1. compute how many completions attempt to use any tool
         # 2. for each tool, compute how many completions attempt to use it
@@ -579,9 +601,31 @@ class TextVQAToolEnv(ToolVisionEnv):
         tool_use_proportion = completions_with_tool_use / num_completions
         zoom_use_proportion = completions_with_zoom_use / num_completions
 
+        # I want to measure how many tool uses per completion, only including completions with at least one tool use
+        tool_uses_per_completion = [
+            self.count_tool_attempts(completion) for completion in completions_text
+        ]
+
+        total_completions_with_tool_use = sum(
+            int(tool_use > 0) for tool_use in tool_uses_per_completion
+        )
+
+        # if no completions have any tool use, return the proportions
+        if total_completions_with_tool_use == 0:
+            return {
+                "tool_use_proportion": tool_use_proportion,
+                "zoom_use_proportion": zoom_use_proportion,
+            }
+
+        # otherwise compute the average tool calls per completion among the completions that have at least one tool call
+        tool_uses_per_completion_final = (
+            sum(tool_uses_per_completion) / total_completions_with_tool_use
+        )
+
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
+            "tool_uses_per_completion": tool_uses_per_completion_final,
         }
 
 

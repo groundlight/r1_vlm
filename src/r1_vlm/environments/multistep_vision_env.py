@@ -9,6 +9,7 @@ from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.envs.environment import Environment
 from vllm import LLM, SamplingParams  # type: ignore
+from vllm.sampling_params import GuidedDecodingParams
 
 from r1_vlm.environments.simple_vision_env import prepare_inputs_for_env
 
@@ -163,6 +164,14 @@ class MultistepVisionEnv(Environment):
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
 
+        custom_sp_last_step = custom_sp.clone()
+
+        guided_decoding_params = GuidedDecodingParams(
+            regex=r"^((?!<tool>).)*$"  # Matches any string not containing "<tool>"
+        )
+
+        custom_sp_last_step.guided_decoding = guided_decoding_params
+
         # initialize state variables
         all_completed = False
         states = [
@@ -177,10 +186,18 @@ class MultistepVisionEnv(Environment):
             for conversation in conversations
         ]
 
+        num_steps_taken = 0
+        total_steps = 2
+
         # main loop
         while not all_completed:
+            sp_to_use = (
+                custom_sp if num_steps_taken < total_steps - 1 else custom_sp_last_step
+            )
+
             states = self.step(states, vlm, custom_sp)
             all_completed = all(state["completed"] for state in states)
+            num_steps_taken += 1
 
         completion_messages = [s["messages"][s["prompt_messages"] :] for s in states]
         completion_ids = [s["completion_ids"] for s in states]
