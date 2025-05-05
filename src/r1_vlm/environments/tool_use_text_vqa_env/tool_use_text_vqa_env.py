@@ -616,6 +616,11 @@ class TextVQAToolEnv(ToolVisionEnv):
                 return [0.0] * len(merged_completion_conversations)
 
             zoom_keypoint = zoom_keypoints[0]
+
+            # if the zoom keypoint is not present, return 0 reward for all completions as there's no way to verify the result
+            if zoom_keypoint is None:
+                return [0.0] * len(merged_completion_conversations)
+
             normalized_zoom_keypoint = (
                 zoom_keypoint[0] / image_width,
                 zoom_keypoint[1] / image_height,
