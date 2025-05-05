@@ -1,4 +1,7 @@
-from datasets import Dataset, DatasetDict, load_dataset
+import json
+
+from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
+from PIL import Image
 from tqdm import tqdm
 
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
@@ -12,7 +15,8 @@ def resize_image(image):
             (
                 int(1024 * image.size[0] / longer_side),
                 int(1024 * image.size[1] / longer_side),
-            )
+            ),
+            Image.Resampling.LANCZOS,
         )
 
     return image
@@ -79,7 +83,10 @@ def generate_r1_messages(example):
 
 
 def create_r1_text_vqa_tool_use_dataset(
-    max_examples_per_split: int | None = None, splits_to_process: list[str] = None
+    max_examples_per_split: int | None = None,
+    splits_to_process: list[str] = None,
+    zoom_demos_path: str
+    | None = "/millcreek/home/sunil/r1_vlm_bumbershoot2/r1_vlm/src/r1_vlm/datasets/text_vqa/zoom_demos.jsonl",
 ):
     dataset = load_dataset("lmms-lab/textvqa")
 
@@ -90,6 +97,29 @@ def create_r1_text_vqa_tool_use_dataset(
         for split in splits_to_process:
             if split not in valid_splits:
                 raise ValueError(f"Invalid split: {split}")
+
+    # --- Load Zoom Demos if path provided ---
+    zoom_demos_lookup = None
+    if zoom_demos_path and "train" in splits_to_process:
+        print(f"Loading zoom demonstrations from: {zoom_demos_path}")
+        try:
+            with open(zoom_demos_path, "r") as f:
+                demos = [json.loads(line) for line in f]
+            zoom_demos_lookup = {
+                demo["question_id"]: demo["keypoint"] for demo in demos
+            }
+            print(f"Loaded {len(zoom_demos_lookup)} zoom demonstrations.")
+        except FileNotFoundError:
+            print(
+                f"Warning: Zoom demos file not found at {zoom_demos_path}. Skipping augmentation."
+            )
+            zoom_demos_lookup = None
+        except Exception as e:
+            print(
+                f"Warning: Error loading zoom demos from {zoom_demos_path}: {e}. Skipping augmentation."
+            )
+            zoom_demos_lookup = None
+    # --- End Load Zoom Demos ---
 
     processed_datasets = {}
     for split in splits_to_process:
@@ -103,13 +133,79 @@ def create_r1_text_vqa_tool_use_dataset(
                 if len(examples) >= max_examples_per_split:
                     break
 
-        processed_datasets[split] = Dataset.from_list(examples)
+        processed_dataset = Dataset.from_list(examples)
+
+        if split == "train" and zoom_demos_lookup is not None:
+            print(f"Augmenting '{split}' split with zoom keypoints...")
+
+            def add_zoom_keypoint(example):
+                keypoint = zoom_demos_lookup.get(example["question_id"], None)
+                return {"zoom_keypoint": keypoint}
+
+            # Add the column
+            processed_dataset = processed_dataset.map(
+                add_zoom_keypoint
+            )  # Added num_proc for potential speedup
+            print(f"Added 'zoom_keypoint' column to '{split}' split.")
+
+            # --- REORDERING START ---
+            print(
+                f"Reordering '{split}' split to place examples with keypoints first..."
+            )
+            # Filter examples with and without keypoints
+            with_keypoint_ds = processed_dataset.filter(
+                lambda example: example["zoom_keypoint"] is not None
+            )
+            without_keypoint_ds = processed_dataset.filter(
+                lambda example: example["zoom_keypoint"] is None
+            )
+
+            # --- Shuffle the 'without_keypoint_ds' ---
+            print("Shuffling examples without keypoints...")
+            without_keypoint_ds = without_keypoint_ds.shuffle(
+                seed=42
+            )  # Added shuffle with seed
+            print("Shuffled examples without keypoints.")
+            # --- End Shuffle ---
+
+            # Concatenate them in the desired order
+            processed_dataset = concatenate_datasets(
+                [with_keypoint_ds, without_keypoint_ds]
+            )
+            print(f"Reordered '{split}' split.")
+            # --- REORDERING END ---
+
+        processed_datasets[split] = processed_dataset
 
     return DatasetDict(processed_datasets)
 
 
 if __name__ == "__main__":
     dataset = create_r1_text_vqa_tool_use_dataset(
-        max_examples_per_split=10, splits_to_process=["train"]
+        max_examples_per_split=10000, splits_to_process=["train"]
     )
-    print(dataset["train"][0])
+
+    # count how many examples have zoom_keypoint
+    num_with_keypoint = len(
+        [
+            example
+            for example in dataset["train"]
+            if example["zoom_keypoint"] is not None
+        ]
+    )
+    print(f"Number of examples with zoom_keypoint: {num_with_keypoint}")
+
+    # Verify the first few examples have keypoints (if any exist)
+    print("\nVerifying first few examples have keypoints (if available):")
+    for i in range(min(5, num_with_keypoint)):
+        print(
+            f"Example {i}: QID={dataset['train'][i]['question_id']}, Keypoint={dataset['train'][i]['zoom_keypoint']}"
+        )
+
+    # Verify an example after the keypoint block has None (if applicable)
+    if num_with_keypoint < len(dataset["train"]):
+        print("\nVerifying example after the keypoint block:")
+        idx_after = num_with_keypoint  # First example expected to have None
+        print(
+            f"Example {idx_after}: QID={dataset['train'][idx_after]['question_id']}, Keypoint={dataset['train'][idx_after]['zoom_keypoint']}"
+        )

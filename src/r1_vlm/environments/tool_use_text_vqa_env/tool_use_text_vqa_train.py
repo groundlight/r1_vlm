@@ -90,8 +90,12 @@ def find_target_linear_names(
 
 
 def train():
+    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-distance-reward-zoom-aspect-ratio-may4-3B/checkpoint-500"
+
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(
+            model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False
+        )
     )
     print("loaded model")
 
@@ -110,7 +114,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-tool-use-no-tool-reward-may4-3B",
+        output_dir="vlm-r1-text-vqa-post-demo-ft-may5-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -120,7 +124,7 @@ def train():
         logging_steps=1,
         save_steps=50,
         save_total_limit=10,
-        num_train_epochs=1,
+        num_train_epochs=100,
         per_device_train_batch_size=1,
         num_generations=3,
         gradient_accumulation_steps=4,
@@ -158,6 +162,8 @@ def train():
         env=vf_env,
         peft_config=peft_config,
         guided_regex=None,
+        # shuffling is disabled because we want to start with the keypoint examples.
+        shuffle_dataset=False,
     )
 
     trainer.train()

@@ -218,7 +218,9 @@ class MultistepVisionEnv(Environment):
         )
         for image in images:
             try:
-                imgcat.imgcat(image)
+                image_copy = image.copy()
+                image_copy.convert("RGB")
+                imgcat.imgcat(image_copy)
             except Exception as e:
                 print(
                     f"Caught failed imgcat call for image. As this is just a debugging print, we will not raise an error. {e}"

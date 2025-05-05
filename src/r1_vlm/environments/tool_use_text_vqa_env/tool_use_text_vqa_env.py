@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Any, Callable
 
@@ -292,8 +293,17 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             output_datasets[split] = dataset_split
 
+        # only keep the examples with keypoints from the train set for initial finetuning
+        # if "train" in splits:
+        #     print("Filtering train set to only include examples with zoom keypoints.")
+        #     output_datasets["train"] = output_datasets["train"].filter(
+        #         lambda x: x["zoom_keypoint"] is not None
+        #     )
+        #     print(f"After filtering, {len(output_datasets['train'])} examples remain.")
+
+        # shuffle the train set
         if "train" in splits:
-            output_datasets["train"].shuffle()
+            output_datasets["train"] = output_datasets["train"].shuffle()
 
         return output_datasets
 
@@ -339,6 +349,11 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             elif reward_function.__name__ == "correct_answer_reward_func":
                 # consistent high reward for getting the answer right
+                schedule = 1.0
+                reward_weights.append(schedule)
+
+            elif reward_function.__name__ == "zoom_keypoint_reward_func":
+                # consistent high reward for using the zoom keypoint
                 schedule = 1.0
                 reward_weights.append(schedule)
             else:
@@ -548,10 +563,104 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             return correctness_rewards
 
+        def extract_keypoint(text):
+            # Pattern to match [x, y] where x and y are integers, allowing multiline
+            pattern = r"\[\s*(\d+)\s*,\s*(\d+)\s*\]"
+            match = re.search(pattern, text, re.DOTALL)
+
+            if match:
+                x = int(match.group(1))
+                y = int(match.group(2))
+                return x, y
+            return None
+
+        def zoom_keypoint_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ):
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            # extract the image size from the prompt
+            prompt = prompts[0]
+            image_content = prompt[1]["content"][1]
+            image = image_content["image"]
+            image_width = image.width
+            image_height = image.height
+
+            # extract the zoom keypoint from the completion, if it exists
+            conv_keypoints = []
+            for conv in merged_completion_conversations:
+                keypoint_found = False
+                for msg in conv:
+                    if msg["role"] == "assistant":
+                        parsed = self.parser.parse(msg["content"][0]["text"])
+                        if hasattr(parsed, "tool") and parsed.tool is not None:
+                            tool_content = parsed.tool
+                            if "name: zoom" in tool_content:
+                                conv_keypoint = extract_keypoint(tool_content)
+                                conv_keypoints.append(conv_keypoint)
+                                keypoint_found = True
+                                break
+                # if no tool call with a zoom keypoint is found, append None
+                if not keypoint_found:
+                    conv_keypoints.append(None)
+
+            print(f"conv_keypoints: {conv_keypoints}")
+
+            # check if the example has a zoom keypoint - this is a list of Group size tuples, each tuple is identical
+            zoom_keypoints = kwargs.get("zoom_keypoint", None)
+
+            # if this example does not have a zoom keypoint, return 0 reward for all completions as there's no way to verify the result
+            if zoom_keypoints is None:
+                return [0.0] * len(merged_completion_conversations)
+
+            zoom_keypoint = zoom_keypoints[0]
+
+            # if the zoom keypoint is not present, return 0 reward for all completions as there's no way to verify the result
+            if zoom_keypoint is None:
+                return [0.0] * len(merged_completion_conversations)
+
+            normalized_zoom_keypoint = (
+                zoom_keypoint[0] / image_width,
+                zoom_keypoint[1] / image_height,
+            )
+            print(f"normalized_zoom_keypoint: {normalized_zoom_keypoint}")
+
+            normalized_conv_keypoints = []
+            for conv_keypoint in conv_keypoints:
+                if conv_keypoint is None:
+                    normalized_conv_keypoints.append(None)
+                else:
+                    normalized_conv_keypoints.append(
+                        (
+                            conv_keypoint[0] / image_width,
+                            conv_keypoint[1] / image_height,
+                        )
+                    )
+
+            rewards = []
+            for normalized_conv_keypoint in normalized_conv_keypoints:
+                if normalized_conv_keypoint is None:
+                    rewards.append(0.0)
+                else:
+                    # compute the normalized euclidean distance between the keypoint in the tool call and the zoom keypoint
+                    distance = math.sqrt(
+                        (normalized_conv_keypoint[0] - normalized_zoom_keypoint[0]) ** 2
+                        + (normalized_conv_keypoint[1] - normalized_zoom_keypoint[1])
+                        ** 2
+                    )
+                    # clip the reward at 0.0, as this value could be negative (1 - root 2) worst case
+                    reward = max(1 - distance, 0.0)
+                    rewards.append(reward)
+
+            return rewards
+
         return [
             format_reward_func,
             tool_execution_reward_func,
             correct_answer_reward_func,
+            zoom_keypoint_reward_func,
         ]
 
     def log_metrics(self, conversations, completions_text, completion_messages):
@@ -560,10 +669,16 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         completions_with_tool_use = 0
         completions_with_zoom_use = 0
+        use_horizontal_zoom = 0
+        use_vertical_zoom = 0
+        use_square_zoom = 0
 
         for completion in completions_text:
             tool_use_regex = r"<tool>(.*?)</tool>"
             zoom_use_string = "name: zoom"
+            horizontal_zoom_use_string = "aspect_ratio_mode: horizontal"
+            vertical_zoom_use_string = "aspect_ratio_mode: vertical"
+            square_zoom_use_string = "aspect_ratio_mode: square"
             tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
             if tool_matches:
                 completions_with_tool_use += 1
@@ -571,8 +686,15 @@ class TextVQAToolEnv(ToolVisionEnv):
                     if zoom_use_string in tool_content:
                         completions_with_zoom_use += 1
 
+                        if horizontal_zoom_use_string in tool_content:
+                            use_horizontal_zoom += 1
+                        if vertical_zoom_use_string in tool_content:
+                            use_vertical_zoom += 1
+                        if square_zoom_use_string in tool_content:
+                            use_square_zoom += 1
+
         print(
-            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom"
+            f"There are {len(completions_text)} completions, \n {completions_with_tool_use} of which attempt to use a tool, \n {completions_with_zoom_use} of which attempt to use zoom. \n {use_horizontal_zoom} of which attempt to use horizontal zoom, \n {use_vertical_zoom} of which attempt to use vertical zoom, \n {use_square_zoom} of which attempt to use square zoom"
         )
 
         num_completions = len(completions_text)
@@ -582,6 +704,9 @@ class TextVQAToolEnv(ToolVisionEnv):
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
+            "use_horizontal_zoom": use_horizontal_zoom,
+            "use_vertical_zoom": use_vertical_zoom,
+            "use_square_zoom": use_square_zoom,
         }
 
 
