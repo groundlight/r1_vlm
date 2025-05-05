@@ -303,7 +303,7 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         # shuffle the train set
         if "train" in splits:
-            output_datasets["train"].shuffle()
+            output_datasets["train"] = output_datasets["train"].shuffle()
 
         return output_datasets
 
