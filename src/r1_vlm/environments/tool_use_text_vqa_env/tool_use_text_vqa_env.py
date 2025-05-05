@@ -293,13 +293,17 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             output_datasets[split] = dataset_split
 
-        # only keep the examples with keypoints from the train set for testing
+        # only keep the examples with keypoints from the train set for initial finetuning
+        # if "train" in splits:
+        #     print("Filtering train set to only include examples with zoom keypoints.")
+        #     output_datasets["train"] = output_datasets["train"].filter(
+        #         lambda x: x["zoom_keypoint"] is not None
+        #     )
+        #     print(f"After filtering, {len(output_datasets['train'])} examples remain.")
+
+        # shuffle the train set
         if "train" in splits:
-            print("Filtering train set to only include examples with zoom keypoints.")
-            output_datasets["train"] = output_datasets["train"].filter(
-                lambda x: x["zoom_keypoint"] is not None
-            )
-            print(f"After filtering, {len(output_datasets['train'])} examples remain.")
+            output_datasets["train"].shuffle()
 
         return output_datasets
 
