@@ -582,16 +582,29 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         completions_with_tool_use = 0
         completions_with_zoom_use = 0
+        use_horizontal_zoom = 0
+        use_vertical_zoom = 0
+        use_square_zoom = 0
+
+        tool_use_regex = r"<tool>(.*?)</tool>"
+        zoom_use_string = "name: zoom"
+        horizontal_zoom_use_string = "aspect_ratio_mode: horizontal"
+        vertical_zoom_use_string = "aspect_ratio_mode: vertical"
+        square_zoom_use_string = "aspect_ratio_mode: square"
 
         for completion in completions_text:
-            tool_use_regex = r"<tool>(.*?)</tool>"
-            zoom_use_string = "name: zoom"
             tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
             if tool_matches:
                 completions_with_tool_use += 1
                 for tool_content in tool_matches:
                     if zoom_use_string in tool_content:
                         completions_with_zoom_use += 1
+                        if horizontal_zoom_use_string in tool_content:
+                            use_horizontal_zoom += 1
+                        if vertical_zoom_use_string in tool_content:
+                            use_vertical_zoom += 1
+                        if square_zoom_use_string in tool_content:
+                            use_square_zoom += 1
 
         print(
             f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom"
@@ -600,6 +613,9 @@ class TextVQAToolEnv(ToolVisionEnv):
         num_completions = len(completions_text)
         tool_use_proportion = completions_with_tool_use / num_completions
         zoom_use_proportion = completions_with_zoom_use / num_completions
+        horizontal_zoom_use_proportion = use_horizontal_zoom / completions_with_zoom_use
+        vertical_zoom_use_proportion = use_vertical_zoom / completions_with_zoom_use
+        square_zoom_use_proportion = use_square_zoom / completions_with_zoom_use
 
         # I want to measure if any completion has more than one tool use
         tool_uses_per_completion = [
@@ -613,6 +629,9 @@ class TextVQAToolEnv(ToolVisionEnv):
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
+            "horizontal_zoom_use_proportion": horizontal_zoom_use_proportion,
+            "vertical_zoom_use_proportion": vertical_zoom_use_proportion,
+            "square_zoom_use_proportion": square_zoom_use_proportion,
             "any_completion_with_more_than_one_tool_use": any_completion_with_more_than_one_tool_use,
         }
 
