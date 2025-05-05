@@ -660,10 +660,16 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         completions_with_tool_use = 0
         completions_with_zoom_use = 0
+        use_horizontal_zoom = 0
+        use_vertical_zoom = 0
+        use_square_zoom = 0
 
         for completion in completions_text:
             tool_use_regex = r"<tool>(.*?)</tool>"
             zoom_use_string = "name: zoom"
+            horizontal_zoom_use_string = "aspect_ratio_mode: horizontal"
+            vertical_zoom_use_string = "aspect_ratio_mode: vertical"
+            square_zoom_use_string = "aspect_ratio_mode: square"
             tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
             if tool_matches:
                 completions_with_tool_use += 1
@@ -671,8 +677,15 @@ class TextVQAToolEnv(ToolVisionEnv):
                     if zoom_use_string in tool_content:
                         completions_with_zoom_use += 1
 
+                        if horizontal_zoom_use_string in tool_content:
+                            use_horizontal_zoom += 1
+                        if vertical_zoom_use_string in tool_content:
+                            use_vertical_zoom += 1
+                        if square_zoom_use_string in tool_content:
+                            use_square_zoom += 1
+
         print(
-            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom"
+            f"There are {len(completions_text)} completions, \n {completions_with_tool_use} of which attempt to use a tool, \n {completions_with_zoom_use} of which attempt to use zoom. \n {use_horizontal_zoom} of which attempt to use horizontal zoom, \n {use_vertical_zoom} of which attempt to use vertical zoom, \n {use_square_zoom} of which attempt to use square zoom"
         )
 
         num_completions = len(completions_text)
@@ -682,6 +695,9 @@ class TextVQAToolEnv(ToolVisionEnv):
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
+            "use_horizontal_zoom": use_horizontal_zoom,
+            "use_vertical_zoom": use_vertical_zoom,
+            "use_square_zoom": use_square_zoom,
         }
 
 
