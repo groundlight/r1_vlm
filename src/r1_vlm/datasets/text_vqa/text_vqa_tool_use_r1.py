@@ -31,12 +31,8 @@ def generate_r1_messages(example):
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
     instruction = f"""
-    You are answering a question from the TextVQA benchmark, where you need to read and reason about text in images to answer questions about them.
-
-    Please thoroughly think through the question and refine your answer while thinking. Then, provide your answer. The answer (which you will provide in the <answer> </answer> tags) should be a single word or phrase directly answering the question.
-    Question: {question}
-
     The image size is {image_size}.
+    {question}\nPlease try to answer the question with short words or phrases if possible.  
     """
 
     r1_messages = [
