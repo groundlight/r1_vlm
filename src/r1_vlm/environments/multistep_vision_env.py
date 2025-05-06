@@ -6,12 +6,12 @@ from typing import Any
 import imgcat
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.envs.environment import Environment
 from vllm import LLM, SamplingParams  # type: ignore
 from vllm.sampling_params import GuidedDecodingParams
 
 from r1_vlm.environments.simple_vision_env import prepare_inputs_for_env
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.envs.environment import Environment
 
 
 class MultistepVisionEnv(Environment):
@@ -164,16 +164,19 @@ class MultistepVisionEnv(Environment):
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
 
-        custom_sp_last_step = custom_sp.clone()
+        if self.custom_sp_last_step is not None:
+            pass
+        else:
+            self.custom_sp_last_step = custom_sp.clone()
 
-        # Use [\s\S]* to match any character including newlines
-        full_regex = r"([^<]*)</think>([^<]*)<answer>([^<]*)</answer>"
+            # Use [\s\S]* to match any character including newlines
+            full_regex = r"([^<]*)</think>([^<]*)<answer>([^<]*)</answer>"
 
-        guided_decoding_params = GuidedDecodingParams(
-            regex=full_regex
-        )  # Use full_regex now
+            guided_decoding_params = GuidedDecodingParams(
+                regex=full_regex
+            )  # Use full_regex now
 
-        custom_sp_last_step.guided_decoding = guided_decoding_params
+            self.custom_sp_last_step.guided_decoding = guided_decoding_params
 
         # initialize state variables
         all_completed = False
@@ -195,7 +198,9 @@ class MultistepVisionEnv(Environment):
         # main loop
         while not all_completed:
             sp_to_use = (
-                custom_sp if num_steps_taken < total_steps - 1 else custom_sp_last_step
+                custom_sp
+                if num_steps_taken < total_steps - 1
+                else self.custom_sp_last_step
             )
 
             states = self.step(states, vlm, sp_to_use)

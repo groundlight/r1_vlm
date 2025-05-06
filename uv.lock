@@ -3667,7 +3667,7 @@ wheels = [
 
 [[package]]
 name = "qwen-vl-utils"
-version = "0.0.10"
+version = "0.0.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "av" },
@@ -3675,9 +3675,9 @@ dependencies = [
     { name = "pillow" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/24/20/54ac98869530d65b111bfd189c301564a3f1af17e5fc40de421ca6f01664/qwen_vl_utils-0.0.10.tar.gz", hash = "sha256:e5bb985508a85dfc339989870a35fbd0362f96bbb01e7e0472ff89942d33ceb8", size = 6975 }
+sdist = { url = "https://files.pythonhosted.org/packages/42/9f/1229a40ebd49f689a0252144126f3865f31bb4151e942cf781a2936f0c4d/qwen_vl_utils-0.0.11.tar.gz", hash = "sha256:083ba1e5cfa5002165b1e3bddd4d6d26d1d6d34473884033ef12ae3fe8496cd5", size = 7924 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/f2/b489f9077bd410f44400d056ad7b0246ee3c516bf9d65b362ea35a57ce1c/qwen_vl_utils-0.0.10-py3-none-any.whl", hash = "sha256:a31d170f1e8c511f79b6bbf5cd77d7e8f7c9b1d68db102be140843fa57b46a0a", size = 6654 },
+    { url = "https://files.pythonhosted.org/packages/0a/c2/ad7f93e1eea4ea0aefd1cc6fbe7a7095fd2f03a4d8fe2c3707e612b0866e/qwen_vl_utils-0.0.11-py3-none-any.whl", hash = "sha256:7fd5287ac04d6c1f01b93bf053b0be236a35149e414c9e864e3cc5bf2fe8cb7b", size = 7584 },
 ]
 
 [[package]]
@@ -3749,7 +3749,7 @@ requires-dist = [
     { name = "pycocotools", specifier = ">=2.0.8" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "qwen-vl-utils", specifier = ">=0.0.10" },
+    { name = "qwen-vl-utils", specifier = ">=0.0.11" },
     { name = "runpod", specifier = ">=1.7.7" },
     { name = "sentence-transformers", specifier = ">=4.1.0" },
     { name = "spaces", specifier = ">=0.32.0" },

@@ -2,6 +2,7 @@ from datasets import Dataset, DatasetDict, load_dataset
 from tqdm import tqdm
 
 from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import resize_image
+from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 
 
 def process_example(example):
@@ -21,7 +22,7 @@ def process_example(example):
             "content": [
                 {
                     "type": "image",
-                    "image": image,
+                    "image": IMAGE_PLACEHOLDER,
                 },
                 {"type": "text", "text": instruction},
             ],
@@ -38,7 +39,10 @@ def process_example(example):
     }
 
 
-def create_text_vqa_base_for_eval_dataset(splits_to_process: list[str] | None = None):
+def create_text_vqa_base_for_eval_dataset(
+    splits_to_process: list[str] | None = None,
+    max_examples_per_split: int | None = None,
+):
     dataset = load_dataset("lmms-lab/textvqa")
 
     valid_splits = ["train", "validation", "test"]
@@ -56,6 +60,12 @@ def create_text_vqa_base_for_eval_dataset(splits_to_process: list[str] | None = 
         for example in tqdm(dataset[split], desc=f"Processing {split} examples"):
             processed_example = process_example(example)
             examples.append(processed_example)
+
+            if (
+                max_examples_per_split is not None
+                and len(examples) >= max_examples_per_split
+            ):
+                break
 
         processed_datasets[split] = Dataset.from_list(examples)
 
