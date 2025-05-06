@@ -13,7 +13,7 @@ def calculate_crop_coordinates(
     keypoint: List[int],
     image_size: Tuple[int, int],
     aspect_ratio_mode: str,
-    base_target_size: int = 300,
+    base_target_size: int = 400,
 ) -> Tuple[int, int, int, int]:
     """
     Calculates the crop coordinates for a box centered around a keypoint,
@@ -137,7 +137,6 @@ def zoom(
     """
     Returns an image zoomed in on the specified keypoint with a given aspect ratio.
     This is useful to see a region of interest with higher clarity, like for reading text or identifying objects.
-
     The choice of aspect ration is helpful depending on the task.
     If you are looking at horizontal text or some other wide region, you might use "horizontal" aspect ratio.
     If you are looking at vertical text or some other tall region, you might use "vertical" aspect ratio.
@@ -146,8 +145,7 @@ def zoom(
     Args:
         image_name: str, the name of the image to zoom in on. Can only be called on the "input_image".
         keypoint: list[int], the [x, y] coordinates of the point to center the zoom on. Must be within the image boundaries.
-        aspect_ratio_mode: str, the desired aspect ratio for the zoom window. Must be one of "square", "horizontal", "vertical".
-                             "square" is 1:1, "horizontal" is 2:1 (wider), "vertical" is 1:2 (taller).
+        aspect_ratio_mode: str, the desired aspect ratio for the zoom window. Must be one of "horizontal","square", or "vertical". "horizontal" is 2:1 (wider), "square" is 1:1, "vertical" is 1:2 (taller).
 
     Returns:
         The image zoomed in on the specified keypoint with the requested aspect ratio.
@@ -156,14 +154,14 @@ def zoom(
         <tool>
         name: zoom
         image_name: input_image
-        aspect_ratio_mode: square
+        aspect_ratio_mode: horizontal
         keypoint: [500, 400]
 
         </tool>
         <tool>
         name: zoom
         image_name: input_image
-        aspect_ratio_mode: horizontal
+        aspect_ratio_mode: square
         keypoint: [23, 44]
 
         </tool>
@@ -191,7 +189,7 @@ def zoom(
 
     original_width, original_height = image.size
     # base size for cropping area calculation
-    base_crop_target_size = 300
+    base_crop_target_size = 400
 
     # Validate aspect_ratio_mode and keypoint, then calculate crop box
     crop_box = calculate_crop_coordinates(
@@ -298,9 +296,15 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
             )
         typed_args["keypoint"] = keypoint_list
 
-        # Validate aspect_ratio_mode
-        aspect_mode = raw_args["aspect_ratio_mode"]
-        typed_args["aspect_ratio_mode"] = aspect_mode
+        # Validate and clean aspect_ratio_mode
+        aspect_mode = (
+            raw_args["aspect_ratio_mode"].strip().strip('"')
+        )  # Clean the input string
+        if aspect_mode not in ["square", "horizontal", "vertical"]:
+            raise ValueError(
+                f"Error: aspect_ratio_mode must be 'square', 'horizontal', or 'vertical', but got '{raw_args['aspect_ratio_mode']}'"
+            )
+        typed_args["aspect_ratio_mode"] = aspect_mode  # Store the cleaned value
 
     except json.JSONDecodeError:
         raise ValueError(

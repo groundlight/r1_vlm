@@ -613,9 +613,21 @@ class TextVQAToolEnv(ToolVisionEnv):
         num_completions = len(completions_text)
         tool_use_proportion = completions_with_tool_use / num_completions
         zoom_use_proportion = completions_with_zoom_use / num_completions
-        horizontal_zoom_use_proportion = use_horizontal_zoom / completions_with_zoom_use
-        vertical_zoom_use_proportion = use_vertical_zoom / completions_with_zoom_use
-        square_zoom_use_proportion = use_square_zoom / completions_with_zoom_use
+        horizontal_zoom_use_proportion = (
+            use_horizontal_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
+        vertical_zoom_use_proportion = (
+            use_vertical_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
+        square_zoom_use_proportion = (
+            use_square_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
 
         # I want to measure if any completion has more than one tool use
         tool_uses_per_completion = [
