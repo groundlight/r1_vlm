@@ -33,11 +33,10 @@ def generate_r1_messages(example):
         choices_str += f"{i + 1}. {choice}\n"
 
     instruction = f"""  
+    The image size is {image_size}.
     Question: {question}
 
     {choices_str}
-    
-    The image size is {image_size}.
     """
 
     r1_messages = [
@@ -63,7 +62,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> Let me think step by step.",
+                    "text": "\n<think> ",
                 }
             ],
         },
