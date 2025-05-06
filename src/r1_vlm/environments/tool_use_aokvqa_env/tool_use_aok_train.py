@@ -4,17 +4,17 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from trl import GRPOConfig, ModelConfig
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
 
 
 def load_model_and_processor(
-    model_name_or_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+    model_name_or_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
     gradient_checkpointing: bool = True,
     use_peft: bool = False,
 ):
@@ -106,7 +106,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="/workspace/vlm-r1-no-tool-reward-may3-7B",
+        output_dir="/workspace/vlm-r1-aok-tool-use-with-new-recipie-may6-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -126,7 +126,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.001,
+        beta=1e-5 if peft_config is not None else 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,

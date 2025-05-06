@@ -6,12 +6,12 @@ from typing import Any
 import imgcat
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.envs.environment import Environment
 from vllm import LLM, SamplingParams  # type: ignore
 from vllm.sampling_params import GuidedDecodingParams
 
 from r1_vlm.environments.simple_vision_env import prepare_inputs_for_env
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.envs.environment import Environment
 
 
 class MultistepVisionEnv(Environment):
@@ -160,6 +160,9 @@ class MultistepVisionEnv(Environment):
     def generate(
         self, conversations, vlm_inputs, vlm: LLM, sampling_params: SamplingParams
     ) -> list[list[dict[str, Any]]]:
+        import time
+
+        start_time = time.time()
         custom_sp = sampling_params.clone()
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
@@ -172,6 +175,8 @@ class MultistepVisionEnv(Environment):
 
         custom_sp_last_step.guided_decoding = guided_decoding_params
 
+        stop_time = time.time()
+        print(f"Time taken to set up sampling params: {stop_time - start_time} seconds")
         # initialize state variables
         all_completed = False
         states = [

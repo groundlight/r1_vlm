@@ -3,8 +3,6 @@ from typing import Any, Callable
 
 from datasets import Dataset
 from transformers import AutoProcessor
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.parsers import XMLParser
 
 from r1_vlm.datasets.aok_vqa.aok_vqa_mc_tool_use_r1 import (
     create_r1_aok_vqa_tool_use_dataset,
@@ -20,6 +18,8 @@ from r1_vlm.tools.object_detection import (
 )
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.parsers import XMLParser
 
 # This is a global variable that is used to store the object detection tool. It is accessed by the detect_objects function.
 od_tool = ObjectDetectionTool()
@@ -308,6 +308,28 @@ class AOKVQAToolEnv(ToolVisionEnv):
             correct_answer_reward_func,
         ]
 
+    def count_tool_attempts(self, conversation):
+        """
+        Returns the number of tool attempts in the conversation.
+        """
+        tool_attempts = 0
+        successful_executions = 0
+
+        for i, message in enumerate(conversation):
+            if message["role"] == "assistant":
+                parsed = self.parser.parse(message["content"][0]["text"])
+                if hasattr(parsed, "tool") and parsed.tool is not None:
+                    tool_attempts += 1
+                    if (
+                        i + 1 < len(conversation)
+                        and conversation[i + 1]["role"] == "user"
+                    ):
+                        response = conversation[i + 1]["content"][0]["text"]
+                        if "Error:" not in response:
+                            successful_executions += 1
+
+        return tool_attempts
+
     def log_metrics(self, conversations, completions_text, completion_messages):
         # 1. compute how many completions attempt to use any tool
         # 2. for each tool, compute how many completions attempt to use it
@@ -316,10 +338,18 @@ class AOKVQAToolEnv(ToolVisionEnv):
         completions_with_zoom_use = 0
         completions_with_detect_objects_use = 0
 
+        use_horizontal_zoom = 0
+        use_vertical_zoom = 0
+        use_square_zoom = 0
+
         for completion in completions_text:
             tool_use_regex = r"<tool>(.*?)</tool>"
             zoom_use_string = "name: zoom"
             detect_objects_use_string = "name: detect_objects"
+
+            horizontal_zoom_use_string = "aspect_ratio_mode: horizontal"
+            vertical_zoom_use_string = "aspect_ratio_mode: vertical"
+            square_zoom_use_string = "aspect_ratio_mode: square"
 
             tool_matches = re.findall(tool_use_regex, completion, re.DOTALL)
             if tool_matches:
@@ -327,11 +357,19 @@ class AOKVQAToolEnv(ToolVisionEnv):
                 for tool_content in tool_matches:
                     if zoom_use_string in tool_content:
                         completions_with_zoom_use += 1
+
+                        if horizontal_zoom_use_string in tool_content:
+                            use_horizontal_zoom += 1
+                        if vertical_zoom_use_string in tool_content:
+                            use_vertical_zoom += 1
+                        if square_zoom_use_string in tool_content:
+                            use_square_zoom += 1
+
                     if detect_objects_use_string in tool_content:
                         completions_with_detect_objects_use += 1
 
         print(
-            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom, and {completions_with_detect_objects_use} of which attempt to use detect_objects"
+            f"There are {len(completions_text)} completions, {completions_with_tool_use} of which attempt to use a tool, {completions_with_zoom_use} of which attempt to use zoom, {completions_with_detect_objects_use} of which attempt to use detect_objects"
         )
 
         num_completions = len(completions_text)
@@ -341,9 +379,38 @@ class AOKVQAToolEnv(ToolVisionEnv):
             completions_with_detect_objects_use / num_completions
         )
 
+        horizontal_zoom_use_proportion = (
+            use_horizontal_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
+        vertical_zoom_use_proportion = (
+            use_vertical_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
+        square_zoom_use_proportion = (
+            use_square_zoom / completions_with_zoom_use
+            if completions_with_zoom_use > 0
+            else 0
+        )
+
+        # I want to measure if any completion has more than one tool use
+        tool_uses_per_completion = [
+            self.count_tool_attempts(messages) for messages in completion_messages
+        ]
+
+        any_completion_with_more_than_one_tool_use = any(
+            tool_use > 1 for tool_use in tool_uses_per_completion
+        )
+
         return {
             "tool_use_proportion": tool_use_proportion,
             "zoom_use_proportion": zoom_use_proportion,
+            "horizontal_zoom_use_proportion": horizontal_zoom_use_proportion,
+            "vertical_zoom_use_proportion": vertical_zoom_use_proportion,
+            "square_zoom_use_proportion": square_zoom_use_proportion,
+            "any_completion_with_more_than_one_tool_use": any_completion_with_more_than_one_tool_use,
             "detect_objects_use_proportion": detect_objects_use_proportion,
         }
 
