@@ -30,10 +30,7 @@ def generate_r1_messages(example):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    instruction = f"""
-    The image size is {image_size}.
-    {question}\nPlease try to answer the question with short words or phrases if possible.  
-    """
+    instruction = f"The image size is {image_size}.\n{question}\nPlease try to answer the question with short words or phrases if possible."
 
     r1_messages = [
         {
