@@ -231,18 +231,18 @@ class MultistepVisionEnv(Environment):
                 cleaned.append(cleaned_message)
             return cleaned, images
 
-        cleaned_messages, images = clean_messages_for_logging(states[0]["messages"])
-
-        self.logger.info(
-            "Full conversation 0:\n" + json.dumps(cleaned_messages, indent=4)
-        )
-        for image in images:
-            try:
-                imgcat.imgcat(image)
-            except Exception as e:
-                print(
-                    f"Caught failed imgcat call for image. As this is just a debugging print, we will not raise an error. {e}"
-                )
+        for i, state in enumerate(states):
+            cleaned_messages, images = clean_messages_for_logging(state["messages"])
+            self.logger.info(
+                f"Full conversation {i}:\n" + json.dumps(cleaned_messages, indent=4)
+            )
+            for image in images:
+                try:
+                    imgcat.imgcat(image)
+                except Exception as e:
+                    print(
+                        f"Caught failed imgcat call for image. As this is just a debugging print, we will not raise an error. {e}"
+                    )
 
         return output
 

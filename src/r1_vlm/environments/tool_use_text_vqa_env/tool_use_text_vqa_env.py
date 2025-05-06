@@ -197,9 +197,9 @@ def normalize_answer(model_answer, correct_answers):
     model_answer = model_answer.strip()
     correct_answers = [answer.strip() for answer in correct_answers]
 
-    # if there is only one correct answer, we're done
-    if len(set(correct_answers)) == 1:
-        return model_answer, correct_answers
+    # # if there is only one correct answer, we're done
+    # if len(set(correct_answers)) == 1:
+    #     return model_answer, correct_answers
 
     # otherwise we get more normalization, first process punctuation
     correct_answers = [process_punctuation(answer) for answer in correct_answers]
