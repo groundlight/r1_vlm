@@ -106,9 +106,7 @@ class ObjectDetectionTool:
 
         except Exception as e:
             # Catch-all for other unexpected errors in the client logic
-            raise ValueError(
-                f"Unexpected error in detect_objects client: {e}", exc_info=True
-            )
+            raise ValueError(f"Unexpected error in detect_objects client: {e}")
 
         t_client_end = time.time()
         print(
