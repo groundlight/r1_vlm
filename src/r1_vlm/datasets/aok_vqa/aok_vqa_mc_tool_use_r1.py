@@ -28,15 +28,15 @@ def generate_r1_messages(example):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    choices_str = "Possible answers: "
+    choices_str = "Possible answers: \n"
     for i, choice in enumerate(choices):
-        choices_str += f"{i + 1}. {choice}\n"
+        choices_str += f"- {choice}\n"
 
     instruction = f"""  
     The image size is {image_size}.
     Question: {question}
-
     {choices_str}
+    Your answer should be one of the possible answers surrounded by <answer> </answer> tags.
     """
 
     r1_messages = [
