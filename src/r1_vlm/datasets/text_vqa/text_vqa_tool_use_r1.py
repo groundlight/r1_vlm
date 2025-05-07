@@ -4,27 +4,27 @@ from tqdm import tqdm
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 
 
-def resize_image(image):
+def resize_image(image, max_size=1024):
     # if the longer side is greater than 1024, resize it so the longer side is 1024
-    if image.size[0] > 1024 or image.size[1] > 1024:
+    if image.size[0] > max_size or image.size[1] > max_size:
         longer_side = max(image.size[0], image.size[1])
         image = image.resize(
             (
-                int(1024 * image.size[0] / longer_side),
-                int(1024 * image.size[1] / longer_side),
+                int(max_size * image.size[0] / longer_side),
+                int(max_size * image.size[1] / longer_side),
             )
         )
 
     return image
 
 
-def generate_r1_messages(example):
+def generate_r1_messages(example, max_size=1024):
     # unpack the example
     image_id = example["image_id"]
     question_id = example["question_id"]
     question = example["question"]
     # NOTE: We resize the image here if it is too large
-    image = resize_image(example["image"])
+    image = resize_image(example["image"], max_size=max_size)
     image_size = image.size
     answers = example["answers"]
 
@@ -79,7 +79,9 @@ def generate_r1_messages(example):
 
 
 def create_r1_text_vqa_tool_use_dataset(
-    max_examples_per_split: int | None = None, splits_to_process: list[str] = None
+    max_examples_per_split: int | None = None,
+    splits_to_process: list[str] = None,
+    max_size: int = 1024,
 ):
     dataset = load_dataset("lmms-lab/textvqa")
 
@@ -96,7 +98,7 @@ def create_r1_text_vqa_tool_use_dataset(
         print(f"Processing {split} split...")
         examples = []
         for example in tqdm(dataset[split], desc=f"Processing {split} examples"):
-            processed_example = generate_r1_messages(example)
+            processed_example = generate_r1_messages(example, max_size=max_size)
             examples.append(processed_example)
 
             if max_examples_per_split is not None:
@@ -110,6 +112,8 @@ def create_r1_text_vqa_tool_use_dataset(
 
 if __name__ == "__main__":
     dataset = create_r1_text_vqa_tool_use_dataset(
-        max_examples_per_split=10, splits_to_process=["train"]
+        max_examples_per_split=10,
+        splits_to_process=["train"],
+        max_size=1024,
     )
     print(dataset["train"][0])

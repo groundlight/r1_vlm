@@ -100,7 +100,8 @@ def train():
     print("loaded env")
 
     # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"])
+    # max image size smaller for 7B model -> 800 instead of 1024 because of memory constraints
+    datasets = vf_env.get_dataset(splits=["train"], max_size=800)
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()

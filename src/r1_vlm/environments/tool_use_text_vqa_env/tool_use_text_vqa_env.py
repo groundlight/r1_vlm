@@ -275,9 +275,12 @@ class TextVQAToolEnv(ToolVisionEnv):
         self,
         splits: list[str] = None,
         max_examples_per_split: int | None = None,
+        max_size: int = 1024,
     ) -> tuple[Dataset, Dataset, Dataset]:
         dataset = create_r1_text_vqa_tool_use_dataset(
-            splits_to_process=splits, max_examples_per_split=max_examples_per_split
+            splits_to_process=splits,
+            max_examples_per_split=max_examples_per_split,
+            max_size=max_size,
         )
 
         output_datasets = {}
