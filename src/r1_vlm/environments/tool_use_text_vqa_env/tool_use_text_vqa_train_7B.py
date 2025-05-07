@@ -16,7 +16,7 @@ os.environ["WANDB_PROJECT"] = "tool-use-text-vqa-env"
 
 
 def load_model_and_processor(
-    model_name_or_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
+    model_name_or_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
     gradient_checkpointing: bool = True,
     use_peft: bool = False,
 ):
@@ -90,8 +90,9 @@ def find_target_linear_names(
 
 
 def train():
-    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-guided-decoding-zoom-may5-3B/checkpoint-1000"
-
+    checkpoint = (
+        "/workspace/r1_vlm/vlm-r1-text-vqa-guided-decoding-zoom-may6-7B/checkpoint-50"
+    )
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(
             model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False
@@ -104,7 +105,10 @@ def train():
     print("loaded env")
 
     # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"], skip_index=5000)
+    # max image size smaller for 7B model -> 800 instead of 1024 because of memory constraints
+    datasets = vf_env.get_dataset(
+        splits=["train"], max_size=700, max_examples_per_split=2000
+    )
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
@@ -114,7 +118,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-may5-3B-restart",
+        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-may6-7B-restart",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -123,10 +127,10 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=10,
-        num_train_epochs=1,
+        save_total_limit=3,
+        num_train_epochs=4,
         per_device_train_batch_size=1,
-        num_generations=3,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -134,7 +138,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 1e-5,  # 0.0001,
+        beta=1e-5 if peft_config is not None else 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,
@@ -143,12 +147,12 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:3",
+        vllm_device="cuda:6",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
         # TODO: reduce to 0.28?
-        epsilon_high=0.28,
+        epsilon_high=0.35,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
     )
@@ -171,4 +175,4 @@ if __name__ == "__main__":
     train()
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_text_vqa_env/tool_use_text_vqa_train.py
-# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only.yaml src/r1_vlm/environments/tool_use_text_vqa_env/tool_use_text_vqa_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only.yaml src/r1_vlm/environments/tool_use_text_vqa_env/tool_use_text_vqa_train_7B.py
