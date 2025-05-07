@@ -112,7 +112,7 @@ def train():
         # save path on the runpod instance
         output_dir="vlm-r1-text-vqa-soft-reward-may7-3B",
         # increase learning rate for PEFT - 1e-4
-        learning_rate=1e-4 if peft_config is not None else 1e-5,
+        learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
         adam_beta2=0.98,
         lr_scheduler_type="cosine",
