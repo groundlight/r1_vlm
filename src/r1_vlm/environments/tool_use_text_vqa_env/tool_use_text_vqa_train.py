@@ -104,7 +104,7 @@ def train():
     print("loaded env")
 
     # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"])
+    datasets = vf_env.get_dataset(splits=["train"], skip_index=5000)
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()

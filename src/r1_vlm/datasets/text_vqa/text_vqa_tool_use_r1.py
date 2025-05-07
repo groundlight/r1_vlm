@@ -83,6 +83,10 @@ def create_r1_text_vqa_tool_use_dataset(
     splits_to_process: list[str] = None,
     max_size: int = 1024,
 ):
+    """
+    max_size - used to resize the input image to a smaller size to avoid OOM errors
+    """
+
     dataset = load_dataset("lmms-lab/textvqa")
 
     valid_splits = ["train", "validation", "test"]

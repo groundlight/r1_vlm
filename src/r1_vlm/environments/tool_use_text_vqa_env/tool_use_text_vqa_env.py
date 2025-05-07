@@ -276,6 +276,7 @@ class TextVQAToolEnv(ToolVisionEnv):
         splits: list[str] = None,
         max_examples_per_split: int | None = None,
         max_size: int = 1024,
+        skip_index: int | None = None,
     ) -> tuple[Dataset, Dataset, Dataset]:
         dataset = create_r1_text_vqa_tool_use_dataset(
             splits_to_process=splits,
@@ -297,6 +298,11 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         if "train" in splits:
             output_datasets["train"].shuffle()
+
+            if skip_index is not None:
+                output_datasets["train"] = output_datasets["train"].select(
+                    range(skip_index, len(output_datasets["train"]))
+                )
 
         return output_datasets
 
