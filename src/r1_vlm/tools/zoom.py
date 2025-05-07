@@ -156,21 +156,18 @@ def zoom(
         image_name: input_image
         aspect_ratio_mode: horizontal
         keypoint: [500, 400]
-
         </tool>
         <tool>
         name: zoom
         image_name: input_image
         aspect_ratio_mode: square
         keypoint: [23, 44]
-
         </tool>
         <tool>
         name: zoom
         image_name: input_image
         aspect_ratio_mode: vertical
         keypoint: [723, 461]
-
         </tool>
     """
     # get and validate the image
