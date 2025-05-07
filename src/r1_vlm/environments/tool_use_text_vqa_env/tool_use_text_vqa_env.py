@@ -573,15 +573,22 @@ class TextVQAToolEnv(ToolVisionEnv):
             else:
                 return 0.0
 
+            # normalize the str data so we are consistent with vqa score
+            answer, correct_answers = normalize_answer(answer, correct_answers)
+
             # compute the normalized edit distance between the answer and each of the correct answers
             normalized_edit_distances = []
 
             for correct_answer in correct_answers:
-                edit_distance = Levenshtein.distance(answer, correct_answer)
-                normalized_edit_distance = edit_distance / max(
-                    len(answer), len(correct_answer)
-                )
-                normalized_edit_distances.append(normalized_edit_distance)
+                try:
+                    edit_distance = Levenshtein.distance(answer, correct_answer)
+                    normalized_edit_distance = edit_distance / max(
+                        len(answer), len(correct_answer)
+                    )
+                    normalized_edit_distances.append(normalized_edit_distance)
+                except Exception:
+                    # if both the answer and correct_answer have length 0, the norm fails. In this case, we are conservative and give a score of 1.0, implying the model answer is very wrong
+                    normalized_edit_distances.append(1.0)
 
             # lower edit distance = higher score
             normalized_scores = [
@@ -592,6 +599,10 @@ class TextVQAToolEnv(ToolVisionEnv):
             # take the top 3 scores (inspired by VQA score) and average them, clip at 1
             top_3_scores = sorted(normalized_scores, reverse=True)[:3]
             score = min(1, sum(top_3_scores) / 3)
+
+            print(
+                f"answer: {answer}\ncorrect_answers: {correct_answers}\nnormalized_edit_distances: {normalized_edit_distances}\nnormalized_scores: {normalized_scores}\ntop_3_scores: {top_3_scores}\nscore: {score}"
+            )
 
             return score
 
