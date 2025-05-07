@@ -175,7 +175,7 @@ def evaluate(generations_path: str, dataset: Dataset):
 
 
 if __name__ == "__main__":
-    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-tool-use-constant-tool-reward-may3-3B"
+    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-guided-decoding-zoom-may5-3B-restart"
 
     checkpoint_paths = [
         os.path.join(checkpoints_folder, f)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
         if os.path.isdir(os.path.join(checkpoints_folder, f))
     ]
 
-    checkpoints_to_eval = ["400"]
+    checkpoints_to_eval = ["600"]
 
     checkpoint_paths = [
         path
