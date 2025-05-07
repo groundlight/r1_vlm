@@ -30,7 +30,11 @@ def generate_r1_messages(example, max_size=1024):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    instruction = f"The image size is {image_size}.\n{question}\nPlease try to answer the question with short words or phrases if possible."
+    instruction = f"""
+    The image size is {image_size}.
+    Please thoroughly think through the question and refine your answer while thinking. You should try to collect the visual evidence you need to support your answer. Then, provide your answer. The answer (which you will provide in the <answer> </answer> tags) should be a single word or phrase directly answering the question.
+    Question: {question}
+    """
 
     r1_messages = [
         {
