@@ -102,7 +102,7 @@ def train():
     # TODO: increase max examples per split
     # max image size smaller for 7B model -> 800 instead of 1024 because of memory constraints
     datasets = vf_env.get_dataset(
-        splits=["train"], max_size=800, max_examples_per_split=100
+        splits=["train"], max_size=800, max_examples_per_split=7000
     )
     train_dataset = datasets["train"]
 
@@ -123,7 +123,7 @@ def train():
         logging_steps=1,
         save_steps=50,
         save_total_limit=4,
-        num_train_epochs=1,
+        num_train_epochs=2,
         per_device_train_batch_size=1,
         num_generations=6,
         gradient_accumulation_steps=4,
