@@ -90,8 +90,13 @@ def find_target_linear_names(
 
 
 def train():
+    checkpoint = (
+        "/workspace/r1_vlm/vlm-r1-text-vqa-guided-decoding-zoom-may6-7B/checkpoint-50"
+    )
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(
+            model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False
+        )
     )
     print("loaded model")
 
@@ -102,7 +107,7 @@ def train():
     # TODO: increase max examples per split
     # max image size smaller for 7B model -> 800 instead of 1024 because of memory constraints
     datasets = vf_env.get_dataset(
-        splits=["train"], max_size=800, max_examples_per_split=7000
+        splits=["train"], max_size=800, max_examples_per_split=2000
     )
     train_dataset = datasets["train"]
 
@@ -113,7 +118,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-may6-7B",
+        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-may6-7B-restart",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -122,8 +127,8 @@ def train():
         warmup_steps=10,
         logging_steps=1,
         save_steps=50,
-        save_total_limit=4,
-        num_train_epochs=2,
+        save_total_limit=3,
+        num_train_epochs=4,
         per_device_train_batch_size=1,
         num_generations=6,
         gradient_accumulation_steps=4,
