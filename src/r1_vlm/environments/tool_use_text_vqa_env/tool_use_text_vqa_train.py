@@ -104,7 +104,7 @@ def train():
     print("loaded env")
 
     # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"], skip_index=5000)
+    datasets = vf_env.get_dataset(splits=["train"])
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
@@ -114,7 +114,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-may5-3B-restart",
+        output_dir="vlm-r1-text-vqa-soft-reward-may7-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -134,7 +134,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 1e-5,  # 0.0001,
+        beta=1e-5 if peft_config is not None else 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,
@@ -148,7 +148,7 @@ def train():
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
         # TODO: reduce to 0.28?
-        epsilon_high=0.28,
+        epsilon_high=0.35,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
     )
