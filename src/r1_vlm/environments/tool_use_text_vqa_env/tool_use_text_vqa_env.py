@@ -1,6 +1,7 @@
 import re
 from typing import Any, Callable
 
+import Levenshtein
 from datasets import Dataset
 from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
@@ -347,8 +348,11 @@ class TextVQAToolEnv(ToolVisionEnv):
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":
-                # consistent high reward for getting the answer right
-                schedule = 1.0
+                # correctness reward is split between soft and hard correctness
+                schedule = 0.5
+                reward_weights.append(schedule)
+            elif reward_function.__name__ == "soft_correctness_reward_func":
+                schedule = 0.5
                 reward_weights.append(schedule)
             else:
                 raise ValueError(
@@ -530,7 +534,7 @@ class TextVQAToolEnv(ToolVisionEnv):
             prompts, completions, completions_messages, **kwargs
         ) -> list[float]:
             """
-            Provides a reward if the model's answer is correct. Gates on the model either not using tools or using tools correctly.
+            Provides a reward if the model's answer is correct.
             """
             merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
                 prompts_messages=prompts, completions_messages=completions_messages
@@ -557,10 +561,78 @@ class TextVQAToolEnv(ToolVisionEnv):
 
             return correctness_rewards
 
+        def get_edit_distance_score(conversation, correct_answers):
+            """
+            Returns a "soft" vqa score based on the edit distance between the model's answer and the correct answers.
+            """
+            text = conversation[-1]["content"][0]["text"]
+
+            parsed = self.parser.parse(text)
+            if hasattr(parsed, "answer") and parsed.answer is not None:
+                answer = parsed.answer
+            else:
+                return 0.0
+
+            # compute the normalized edit distance between the answer and each of the correct answers
+            normalized_edit_distances = []
+
+            for correct_answer in correct_answers:
+                edit_distance = Levenshtein.distance(answer, correct_answer)
+                normalized_edit_distance = edit_distance / max(
+                    len(answer), len(correct_answer)
+                )
+                normalized_edit_distances.append(normalized_edit_distance)
+
+            # lower edit distance = higher score
+            normalized_scores = [
+                1 - normalized_edit_distance
+                for normalized_edit_distance in normalized_edit_distances
+            ]
+
+            # take the top 3 scores (inspired by VQA score) and average them, clip at 1
+            top_3_scores = sorted(normalized_scores, reverse=True)[:3]
+            score = min(1, sum(top_3_scores) / 3)
+
+            return score
+
+        def soft_correctness_reward_func(
+            prompts, completions, completions_messages, **kwargs
+        ) -> list[float]:
+            """
+            Reward function that checks if the model's answer is correct. Uses a soft normalized edit distance to measure correctness.
+            """
+            merged_completion_conversations = MultistepVisionEnv.preprocess_messages(
+                prompts_messages=prompts, completions_messages=completions_messages
+            )
+
+            # a list of lists of 10 responses from labelers. They should all be the same. Verify this, then take the first one.
+            correct_answers_lists = kwargs["answers"]
+            for correct_answers_list in correct_answers_lists:
+                if not correct_answers_list == correct_answers_lists[0]:
+                    raise ValueError(
+                        f"All correct answers lists should be the same, but got {correct_answers_list}"
+                    )
+            correct_answers = correct_answers_lists[0]
+
+            soft_correctness_rewards = []
+            for conv in merged_completion_conversations:
+                # the correct answers remain constant across the dataset
+                soft_correctness_rewards.append(
+                    get_edit_distance_score(conv, correct_answers)
+                )
+
+            # verify all rewards between 0 and 1
+            assert all(0 <= reward <= 1 for reward in soft_correctness_rewards), (
+                f"All rewards should be between 0 and 1, but got {soft_correctness_rewards}"
+            )
+
+            return soft_correctness_rewards
+
         return [
             format_reward_func,
             tool_execution_reward_func,
             correct_answer_reward_func,
+            soft_correctness_reward_func,
         ]
 
     def count_tool_attempts(self, conversation):
