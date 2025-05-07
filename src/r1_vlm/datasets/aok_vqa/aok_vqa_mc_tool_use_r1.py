@@ -36,7 +36,7 @@ def generate_r1_messages(example):
     The image size is {image_size}.
     Question: {question}
     {choices_str}
-    Your answer should be one of the possible answers surrounded by <answer> </answer> tags.
+    After thinking about the question and the possible answers, your need to select the most likely answer from the list and return it in <answer> </answer> tags.
     """
 
     r1_messages = [
