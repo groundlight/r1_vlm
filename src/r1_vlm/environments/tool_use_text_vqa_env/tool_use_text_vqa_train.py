@@ -110,7 +110,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-eval-prompt-beta0-may6-3B",
+        output_dir="vlm-r1-text-vqa-guided-decoding-zoom-eval-prompt-beta1e-5-may6-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -130,7 +130,7 @@ def train():
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
         # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.0,  # 0.0001,
+        beta=1e-5 if peft_config is not None else 1e-5,  # 0.0001,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,
