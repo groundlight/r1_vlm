@@ -129,60 +129,39 @@ def calculate_crop_coordinates(
 
 
 def zoom(
-    image_name: str,
     keypoint: list[int],
-    aspect_ratio_mode: str,
     **kwargs,
 ) -> Image.Image:
     """
-    Returns an image zoomed in on the specified keypoint with a given aspect ratio.
+    Returns the image zoomed in on the specified keypoint.
     This is useful to see a region of interest with higher clarity, like for reading text or identifying objects.
-    The choice of aspect ration is helpful depending on the task.
-    If you are looking at horizontal text or some other wide region, you might use "horizontal" aspect ratio.
-    If you are looking at vertical text or some other tall region, you might use "vertical" aspect ratio.
-    If you are looking at a region more generally, you might use "square" aspect ratio.
 
     Args:
-        image_name: str, the name of the image to zoom in on. Can only be called on the "input_image".
         keypoint: list[int], the [x, y] coordinates of the point to center the zoom on. Must be within the image boundaries.
-        aspect_ratio_mode: str, the desired aspect ratio for the zoom window. Must be one of "horizontal","square", or "vertical". "horizontal" is 2:1 (wider), "square" is 1:1, "vertical" is 1:2 (taller).
 
     Returns:
-        The image zoomed in on the specified keypoint with the requested aspect ratio.
+        The image zoomed in on the specified keypoint.
 
     Examples:
         <tool>
         name: zoom
-        image_name: input_image
-        aspect_ratio_mode: horizontal
         keypoint: [500, 400]
         </tool>
         <tool>
         name: zoom
-        image_name: input_image
-        aspect_ratio_mode: square
         keypoint: [23, 44]
         </tool>
         <tool>
         name: zoom
-        image_name: input_image
-        aspect_ratio_mode: vertical
         keypoint: [723, 461]
         </tool>
     """
     # get and validate the image
     images = kwargs["images"]
-    image = images.get(image_name, None)
-    if image is None:
-        valid_image_names = list(images.keys())
-        raise ValueError(
-            f"Error: Image {image_name} not found. Valid image names are: {valid_image_names}"
-        )
+    image = images.get("input_image", None)
 
-    if image_name != "input_image":
-        raise ValueError(
-            f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image."
-        )
+    if image is None:
+        raise ValueError("Error: Image not found in images. This shouldn't be possible")
 
     original_width, original_height = image.size
     # base size for cropping area calculation
@@ -192,7 +171,7 @@ def zoom(
     crop_box = calculate_crop_coordinates(
         keypoint,
         (original_width, original_height),
-        aspect_ratio_mode,
+        aspect_ratio_mode="square",
         base_target_size=base_crop_target_size,
     )
 
@@ -235,7 +214,7 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
     """
     Parses raw string arguments for the zoom tool (keypoint version).
 
-    Expects keys: 'name', 'image_name', 'keypoint', 'aspect_ratio_mode'.
+    Expects keys: 'name', 'keypoint'.
     Converts 'keypoint' from a JSON string to a list of integers.
     Detailed validation of values (e.g., keypoint coordinates)
     is deferred to the zoom function itself.
@@ -245,20 +224,17 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
 
     Returns:
         A dictionary containing the arguments with basic type conversions applied,
-        ready for the zoom function. Keys: 'image_name', 'keypoint', 'aspect_ratio_mode'.
+        ready for the zoom function. Keys: 'keypoint'.
 
     Raises:
         ValueError: If required keys are missing, extra keys are present,
                     basic type conversion fails (e.g., 'keypoint' is not valid JSON
-                    or doesn't result in a list of two integers), or
-                    'aspect_ratio_mode' has an invalid value.
+                    or doesn't result in a list of two integers).
     """
     required_keys = {
         "name",
-        "image_name",
         "keypoint",
-        "aspect_ratio_mode",
-    }  # Added aspect_ratio_mode
+    }
     actual_keys = set(raw_args.keys())
 
     # 1. Check for Missing Keys
@@ -278,9 +254,6 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
     # 3. Perform Basic Type Conversions
     typed_args: TypedToolArgs = {}
     try:
-        # Keep image_name as string
-        typed_args["image_name"] = raw_args["image_name"]
-
         # Convert keypoint string to list of ints
         keypoint_list = json.loads(raw_args["keypoint"])
 
@@ -292,16 +265,6 @@ def parse_zoom_args(raw_args: RawToolArgs) -> TypedToolArgs:
                 "Error: Both elements in 'keypoint' list must be integers."
             )
         typed_args["keypoint"] = keypoint_list
-
-        # Validate and clean aspect_ratio_mode
-        aspect_mode = (
-            raw_args["aspect_ratio_mode"].strip().strip('"')
-        )  # Clean the input string
-        if aspect_mode not in ["square", "horizontal", "vertical"]:
-            raise ValueError(
-                f"Error: aspect_ratio_mode must be 'square', 'horizontal', or 'vertical', but got '{raw_args['aspect_ratio_mode']}'"
-            )
-        typed_args["aspect_ratio_mode"] = aspect_mode  # Store the cleaned value
 
     except json.JSONDecodeError:
         raise ValueError(

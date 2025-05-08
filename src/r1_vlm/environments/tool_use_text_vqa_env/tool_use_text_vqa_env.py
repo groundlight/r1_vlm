@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Any, Callable
 
@@ -13,7 +14,7 @@ from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
-from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
 
 # Implementing the exact preprocessing steps that are used in text vqa evaluation
@@ -252,7 +253,7 @@ class TextVQAToolEnv(ToolVisionEnv):
             (zoom, parse_zoom_args),
         ],
         max_steps: int = 3,
-        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED,
     ):
         super().__init__(
             processing_class=processing_class,
@@ -666,12 +667,19 @@ class TextVQAToolEnv(ToolVisionEnv):
                         if "Error:" not in response:
                             successful_executions += 1
 
-        return tool_attempts
+        return {
+            "tool_attempts": tool_attempts,
+            "successful_executions": successful_executions,
+        }
 
-    def log_metrics(self, conversations, completions_text, completion_messages):
-        # 1. compute how many completions attempt to use any tool
-        # 2. for each tool, compute how many completions attempt to use it
-
+    def log_metrics(
+        self,
+        conversations,
+        completions_text,
+        completion_messages,
+        advantages,
+        global_step,
+    ):
         completions_with_tool_use = 0
         completions_with_zoom_use = 0
         use_horizontal_zoom = 0
@@ -723,12 +731,47 @@ class TextVQAToolEnv(ToolVisionEnv):
 
         # I want to measure if any completion has more than one tool use
         tool_uses_per_completion = [
-            self.count_tool_attempts(messages) for messages in completion_messages
+            self.count_tool_attempts(messages)["tool_attempts"]
+            for messages in completion_messages
         ]
 
         any_completion_with_more_than_one_tool_use = any(
             tool_use > 1 for tool_use in tool_uses_per_completion
         )
+
+        # for each completion we want to log:
+        # 1. the advantage
+        # 2. classifiy the completion as:
+        # - no tool use
+        # - failed tool use
+        # - successful tool use
+        # 3. the global step
+
+        # this will help me determine the shape of tool advantages vs non tool advantages
+
+        for advantage, messages in zip(advantages, completion_messages):
+            res = self.count_tool_attempts(messages)
+            tool_attempts = res["tool_attempts"]
+            successful_executions = res["successful_executions"]
+
+            if tool_attempts == 0:
+                classification = "no_tool_use"
+            elif successful_executions == 0:
+                classification = "failed_tool_use"
+            else:
+                classification = "successful_tool_use"
+
+            # save to a jsonl file
+            with open(
+                "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/tool_use_metrics.jsonl",
+                "a",
+            ) as f:
+                data_point = {
+                    "advantage": advantage,
+                    "classification": classification,
+                    "global_step": global_step,
+                }
+                f.write(json.dumps(data_point) + "\n")
 
         return {
             "tool_use_proportion": tool_use_proportion,
