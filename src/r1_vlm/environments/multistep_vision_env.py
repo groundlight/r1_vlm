@@ -6,12 +6,12 @@ from typing import Any
 import imgcat
 from datasets import Dataset
 from transformers import AutoProcessor
+from trl.trainer.grpo_trainer import RewardFunc
+from verifiers.envs.environment import Environment
 from vllm import LLM, SamplingParams  # type: ignore
 from vllm.sampling_params import GuidedDecodingParams
 
 from r1_vlm.environments.simple_vision_env import prepare_inputs_for_env
-from trl.trainer.grpo_trainer import RewardFunc
-from verifiers.envs.environment import Environment
 
 
 class MultistepVisionEnv(Environment):
@@ -104,6 +104,10 @@ class MultistepVisionEnv(Environment):
                 }
             )
 
+            # Backup previous token updates for potential backtracking
+            prev_completion_ids = state["completion_ids"][:]
+            prev_completion_mask = state["completion_mask"][:]
+
             # get token lengths of env response and new completion
             total_prev_len = len(state["prompt_ids"]) + len(state["completion_ids"])
             env_response_len = len(list(vlm_response.prompt_token_ids)) - total_prev_len  # type: ignore
@@ -132,7 +136,25 @@ class MultistepVisionEnv(Environment):
             # otherwise, we get the env response
             else:
                 env_response_messages = self.env_response(state["messages"])
-                state["messages"].extend(env_response_messages)
+
+                # check if the env response is valid
+                if not self.validate_env_response(env_response_messages):
+                    # Backtracking: revert token/mask updates and remove the last generated assistant message
+
+                    print(
+                        "Backtracking during generation. Found error in env response."
+                    )
+                    print(
+                        f"The model generated the following text: {vlm_response.outputs[0].text}"
+                    )
+                    print(f"And the env response was: {env_response_messages}")
+
+                    state["completion_ids"] = prev_completion_ids
+                    state["completion_mask"] = prev_completion_mask
+                    state["messages"].pop()
+
+                else:
+                    state["messages"].extend(env_response_messages)
 
             if not len(state["completion_mask"]) == len(state["completion_ids"]):
                 print(state["messages"])
@@ -156,6 +178,31 @@ class MultistepVisionEnv(Environment):
             states[j] = state
 
         return states
+
+    def validate_env_response(self, env_response_messages):
+        contains_error = []
+
+        # iterate over each actor in the env respopnse
+        for element in env_response_messages:
+            if element["role"] == "user":
+                for message in element["content"]:
+                    if message["type"] == "text":
+                        if any(
+                            error in message["text"]
+                            for error in ["Error", "Error:", "error", "error:"]
+                        ):
+                            contains_error.append(True)
+                        else:
+                            contains_error.append(False)
+            else:
+                # Non assistant messages do not contain errors
+                contains_error.append(False)
+
+        print(
+            f"For the env response: {env_response_messages}, found error: {any(contains_error)}"
+        )
+
+        return not any(contains_error)
 
     def generate(
         self, conversations, vlm_inputs, vlm: LLM, sampling_params: SamplingParams
