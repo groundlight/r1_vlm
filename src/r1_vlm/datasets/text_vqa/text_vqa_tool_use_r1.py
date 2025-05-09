@@ -77,11 +77,14 @@ def generate_r1_messages(example, max_size=1024):
 
 def create_r1_text_vqa_tool_use_dataset(
     max_examples_per_split: int | None = None,
+    train_examples_to_include: list[str] | None = None,
     splits_to_process: list[str] = None,
     max_size: int = 1024,
 ):
     """
     max_size - used to resize the input image to a smaller size to avoid OOM errors
+    train_examples_to_include - list of question_ids to include from the train split
+    splits_to_process - list of splits to process
     """
 
     dataset = load_dataset("lmms-lab/textvqa")
@@ -99,6 +102,13 @@ def create_r1_text_vqa_tool_use_dataset(
         print(f"Processing {split} split...")
         examples = []
         for example in tqdm(dataset[split], desc=f"Processing {split} examples"):
+            if (
+                split == "train"
+                and train_examples_to_include is not None
+                and example["question_id"] not in train_examples_to_include
+            ):
+                continue
+
             processed_example = generate_r1_messages(example, max_size=max_size)
             examples.append(processed_example)
 

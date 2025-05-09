@@ -13,6 +13,9 @@ from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.tool_use_text_vqa_env.find_examples_for_training import (
+    find_examples_for_training,
+)
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
@@ -280,10 +283,13 @@ class TextVQAToolEnv(ToolVisionEnv):
         max_size: int = 1024,
         skip_index: int | None = None,
     ) -> tuple[Dataset, Dataset, Dataset]:
+        train_examples_to_include = find_examples_for_training()
+
         dataset = create_r1_text_vqa_tool_use_dataset(
             splits_to_process=splits,
             max_examples_per_split=max_examples_per_split,
             max_size=max_size,
+            train_examples_to_include=train_examples_to_include,
         )
 
         output_datasets = {}

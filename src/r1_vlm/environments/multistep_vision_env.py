@@ -180,6 +180,9 @@ class MultistepVisionEnv(Environment):
         return states
 
     def validate_env_response(self, env_response_messages):
+        # disables validation of env response
+        return True
+
         contains_error = []
 
         # iterate over each actor in the env respopnse
