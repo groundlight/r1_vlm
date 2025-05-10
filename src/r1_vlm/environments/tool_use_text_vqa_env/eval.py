@@ -87,7 +87,6 @@ def generate_completions(
                 clean_up_tokenization_spaces=False,
             )
 
-            batch_results = []
             for example, generation in zip(batch, generated_texts):
                 model_answer = extract_answer(generation)
                 correct_answers = example["answers"]
@@ -142,7 +141,6 @@ def evaluate(generations_path: str, dataset: Dataset):
 
     total = 0
     correct = 0
-    in_option_set = 0
 
     for example in dataset:
         question_id = example["question_id"]
@@ -175,7 +173,7 @@ def evaluate(generations_path: str, dataset: Dataset):
 
 
 if __name__ == "__main__":
-    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-guided-decoding-zoom-may5-3B-restart"
+    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B"
 
     checkpoint_paths = [
         os.path.join(checkpoints_folder, f)
@@ -183,7 +181,7 @@ if __name__ == "__main__":
         if os.path.isdir(os.path.join(checkpoints_folder, f))
     ]
 
-    checkpoints_to_eval = ["600"]
+    checkpoints_to_eval = ["300"]
 
     checkpoint_paths = [
         path
