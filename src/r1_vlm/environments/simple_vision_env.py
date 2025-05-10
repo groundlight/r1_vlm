@@ -143,7 +143,12 @@ class SimpleVisionEnv(SimpleEnv):
             + json.dumps(states[0]["messages"][-1], indent=4)
         )
         for image in images:
-            imgcat.imgcat(image)
+            try:
+                imgcat.imgcat(image)
+            except Exception as e:
+                print(
+                    f"Error logging imgcat-ing image: {e}. Swallowing error to avoid crashing the run."
+                )
 
         completion_ids = [states[i]["completion_ids"] for i in range(len(states))]
         completion_messages = [states[i]["messages"][-1:] for i in range(len(states))]
