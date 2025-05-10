@@ -96,7 +96,7 @@ def train():
     )
     print("loaded model")
 
-    vf_env = SimpleTextVQAEnv()
+    vf_env = SimpleTextVQAEnv(processing_class=processor)
 
     print("loaded env")
 

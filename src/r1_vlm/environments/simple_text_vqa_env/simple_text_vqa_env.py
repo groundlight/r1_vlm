@@ -248,7 +248,9 @@ class SimpleTextVQAEnv(SimpleVisionEnv):
     def __init__(
         self,
         dataset_name: str = None,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.dataset_name = dataset_name
         self.parser = XMLParser(fields=["think", "answer"])
         self._fields = [
