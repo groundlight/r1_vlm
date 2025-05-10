@@ -41,7 +41,7 @@ def generate_completions(
         model=checkpoint_path,
         gpu_memory_utilization=1.0,
         dtype="bfloat16",
-        tensor_parallel_size=2,
+        tensor_parallel_size=1,
         enable_prefix_caching=True,
         limit_mm_per_prompt={"image": 2, "video": 0},
     )
@@ -51,7 +51,7 @@ def generate_completions(
         max_tokens=2048,
     )
 
-    batch_size = 6
+    batch_size = 1
     batches = []
 
     for example in dataset:
@@ -173,7 +173,7 @@ def evaluate(generations_path: str, dataset: Dataset):
 
 
 if __name__ == "__main__":
-    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B"
+    checkpoints_folder = "/millcreek/home/sunil/r1_vlm/successful_run_hard_data_may9/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B"
 
     checkpoint_paths = [
         os.path.join(checkpoints_folder, f)
@@ -181,7 +181,7 @@ if __name__ == "__main__":
         if os.path.isdir(os.path.join(checkpoints_folder, f))
     ]
 
-    checkpoints_to_eval = ["300"]
+    checkpoints_to_eval = ["800"]
 
     checkpoint_paths = [
         path

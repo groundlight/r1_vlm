@@ -25,7 +25,7 @@ def add_vqa_scores(results: list[dict]):
 
 
 if __name__ == "__main__":
-    trained_model_eval = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B/checkpoint-300_generations.json"
+    trained_model_eval = "/millcreek/home/sunil/r1_vlm/successful_run_hard_data_may9/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B/checkpoint-800_generations.json"
     base_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/base_eval_on_validation_results.jsonl"
 
     base_model_results = []
