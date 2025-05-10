@@ -1,42 +1,152 @@
-import base64
-import io
+import base64  # For encoding/decoding images
+import io  # For handling image bytes
+import json
 import os
+import time
 
-# Add imports for numpy and cv2
-import cv2
-import numpy as np
-import pytest
-import requests
+import requests  # To make HTTP requests to the API server
+
+# Remove multiprocessing imports
+# from multiprocessing import Pipe, Process
+# Remove YOLO import from here
+# from ultralytics import YOLO
+# Add imports for numpy and cv2 (if still needed for other parts, unlikely now)
 from dotenv import load_dotenv
-from imgcat import imgcat
 from PIL import Image
+
+from r1_vlm.environments.tool_vision_env import RawToolArgs, TypedToolArgs
 
 load_dotenv()
 
-API_IP = str(os.getenv("API_IP"))
-API_PORT = int(os.getenv("API_PORT"))
+# --- Configuration for the Detection API Server ---
+# Get the API server's URL from environment variables, default to localhost:8001
+DETECTION_API_HOST = os.getenv("DETECTION_API_HOST", "localhost")
+DETECTION_API_PORT = int(os.getenv("DETECTION_API_PORT", 8001))
+DETECTION_API_URL = f"http://{DETECTION_API_HOST}:{DETECTION_API_PORT}/detect"
+# --- End Configuration ---
+
+_object_detection_tool = None
 
 
-def detect_objects(
-    image_name: str, classes: list[str], **kwargs
-) -> tuple[list[dict], Image.Image]:
+class ObjectDetectionTool:
+    def __init__(self):
+        # Store the URL for the detection API server
+        self.api_url = DETECTION_API_URL
+
+    def detect_objects(self, image: Image.Image) -> dict:
+        """Sends image to detection API server and returns results."""
+        t_client_start = time.time()
+        annotated_image = None  # Default
+        dets_string = "Error: Detection failed."  # Default error message
+
+        try:
+            # 1. Prepare Image for Sending
+            buffer = io.BytesIO()
+            # Save image to buffer in a common format like PNG
+            image.save(buffer, format="PNG")
+            img_bytes = buffer.getvalue()
+            img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+            t_encoded = time.time()
+
+            # 2. Prepare Request Payload
+            payload = {"image_base64": img_base64}
+
+            # 3. Call the API Server
+            response = requests.post(
+                self.api_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=60.0,  # Set a reasonable timeout (e.g., 60 seconds)
+            )
+            t_responded = time.time()
+
+            # 4. Process Response
+            if response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    dets_string = response_data.get(
+                        "text_data", "Error: Missing text_data in response."
+                    )
+                    image_data_base64 = response_data.get("image_data_base64")
+
+                    if image_data_base64:
+                        try:
+                            annotated_bytes = base64.b64decode(image_data_base64)
+                            annotated_image = Image.open(io.BytesIO(annotated_bytes))
+                        except Exception as img_err:
+                            raise ValueError(
+                                f"Failed to decode/load annotated image from response: {img_err}"
+                            )
+                            # Keep annotated_image as None
+
+                except json.JSONDecodeError as json_err:
+                    raise ValueError(
+                        f"Failed to decode JSON response from API: {json_err}"
+                    )
+
+                except Exception as proc_err:  # Catch other errors processing response
+                    raise ValueError(
+                        f"Error processing successful API response: {proc_err}"
+                    )
+
+            else:
+                # Handle HTTP errors
+                error_msg = f"Error from detection API: {response.status_code}"
+                try:
+                    error_detail = response.json().get("detail", response.text)
+                    error_msg += f" - {error_detail}"
+                except json.JSONDecodeError:
+                    error_msg += f" - {response.text}"
+                raise ValueError(error_msg)
+
+        except requests.exceptions.Timeout:
+            raise ValueError("Request to detection API timed out after 60s.")
+        except requests.exceptions.RequestException as req_err:
+            raise ValueError(f"Request to detection API failed: {req_err}")
+
+        except Exception as e:
+            # Catch-all for other unexpected errors in the client logic
+            raise ValueError(f"Unexpected error in detect_objects client: {e}")
+
+        t_client_end = time.time()
+        print(
+            f"detect_objects client timings (s): "
+            f"Encode: {t_encoded - t_client_start:.3f}, "
+            f"API Call: {t_responded - t_encoded:.3f}, "
+            f"Decode/Process: {t_client_end - t_responded:.3f}, "
+            f"Total: {t_client_end - t_client_start:.3f}"
+        )
+
+        return {"text_data": dets_string, "image_data": annotated_image}
+
+    def __del__(self):
+        """Cleanup method - nothing persistent to clean up"""
+        pass
+
+
+def set_object_detection_tool(tool: ObjectDetectionTool):
+    global _object_detection_tool
+    _object_detection_tool = tool
+
+
+def detect_objects(image_name: str, **kwargs) -> tuple[list[dict], Image.Image]:
     """
-    Calls an open vocabulary object detection model on the image. Useful for localizing objects in an image or determining if an object is present.
+    Calls an object detection model on the image. Useful for localizing objects in an image or determining if an object is present.
 
     Args:
         image_name: str, the name of the image to detect objects in. Can only be called on the "input_image" image.
-        classes: list[str], the classes to detect. As the model is open vocabulary, your classes can be any object you want to detect in the image. Each class should contain an noun for best results.
 
     Returns:
         1. A list of dictionaries, each containing the following keys:
             - "bbox_2d": list[int], the bounding box of the object in the format of [x_min, y_min, x_max, y_max] in pixel coordinates
             - "label": str, the label of the object
-            - "confidence": float, the confidence score of the detection
         2. The original image with the detections overlaid on it.
 
     Examples:
-        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["car", "person"]}}</tool>
-        <tool>{"name": "detect_objects", "args": {"image_name": "input_image", "classes": ["elephant", "white jeep"]}}</tool>
+        <tool>
+        name: detect_objects
+        image_name: input_image
+        </tool>
     """
 
     images = kwargs["images"]
@@ -53,117 +163,60 @@ def detect_objects(
             f"Error: Image {image_name} is not the input_image. This tool can only be called on the input_image."
         )
 
-    # construct the API request
-    # I decided to fix the confidence threshold at 0.15, as the model tends to set this value very high, which leads to a lot of false negatives
-    url = f"http://{API_IP}:{API_PORT}/detect?confidence={0.15}"
-
-    # Convert PIL Image to bytes
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format="JPEG")
-    img_byte_arr = img_byte_arr.getvalue()
-
-    files = {"image": img_byte_arr}
-    data = {}
-    for c in classes:
-        data.setdefault("classes", []).append(c)
-
-    # send the request
-    response = requests.post(url, files=files, data=data)
-
-    if response.status_code == 200:
-        result = response.json()
-    else:
-        raise Exception(
-            f"Error: API request failed with status code {response.status_code}"
+    if _object_detection_tool is None:
+        raise RuntimeError(
+            "ObjectDetectionTool not initialized. Call set_object_detection_tool first."
         )
 
-    detections = result["results"]["detections"]
+    # Call the method which now calls the API
+    return _object_detection_tool.detect_objects(image)  # Return type is now dict
 
-    dets = []
-    for detection in detections:
-        dets.append(
-            {
-                "bbox_2d": detection["bbox_2d"],
-                "label": detection["label"],
-                "confidence": round(detection["confidence"], 2),
-            }
+
+def parse_detect_objects_args(raw_args: RawToolArgs) -> TypedToolArgs:
+    """
+    Parses raw string arguments for the detect_objects tool.
+
+    Expects keys: 'name', 'image_name'
+    Detailed validation of values (e.g., 'image_name' validity)
+    is deferred to the detect_objects function itself.
+
+    Args:
+        raw_args: Dictionary with string keys and string values from the general parser.
+
+    Returns:
+        A dictionary containing the arguments. Keys: 'image_name'.
+
+    Raises:
+        ValueError: If required keys are missing or extra keys are present.
+    """
+    required_keys = {"name", "image_name"}
+    actual_keys = set(raw_args.keys())
+
+    # 1. Check for Missing Keys
+    missing_keys = required_keys - actual_keys
+    if missing_keys:
+        raise ValueError(
+            f"Error: Missing required arguments for detect_objects tool: {', '.join(sorted(missing_keys))}"
         )
 
-    if len(dets) == 0:
-        dets_string = "No objects detected."
-    else:
-        dets_string = ""
-        for index, det in enumerate(dets):
-            dets_string += f"{index + 1}. {det}"
+    # 2. Check for extra keys
+    extra_keys = actual_keys - required_keys
+    if extra_keys:
+        raise ValueError(
+            f"Error: Unexpected arguments for detect_objects tool: {', '.join(sorted(extra_keys))}"
+        )
 
-            if index < len(dets) - 1:
-                dets_string += "\n"
-
-    # convert the annotated image(base64 encoded) to a PIL Image
-    annotated_image_data = base64.b64decode(result["annotated_image"])
-    annotated_image_pil = Image.open(io.BytesIO(annotated_image_data))
-
-    # Convert PIL Image to NumPy array (OpenCV format)
-    # PIL images with mode 'RGB' are loaded as NumPy arrays with shape (H, W, 3) in RGB order.
-    # PIL images with mode 'RGBA' are loaded as NumPy arrays with shape (H, W, 4) in RGBA order.
-    annotated_image_np = np.array(annotated_image_pil)
-
-    # Convert BGR(A) to RGB(A) using OpenCV if it's a color image
-    # Assuming the source API sent BGR/BGRA data, which np.array converted retaining channel order relative to PIL's interpretation.
-    # If PIL interpreted as RGB, the np array is RGB. If RGBA, the np array is RGBA.
-    # Since the *source* was BGR/BGRA, we convert the numpy array from BGR/BGRA to RGB/RGBA.
-    if annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 3:  # RGB/BGR
-        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGR2RGB)
-    elif annotated_image_np.ndim == 3 and annotated_image_np.shape[2] == 4:  # RGBA/BGRA
-        annotated_image_np_rgb = cv2.cvtColor(annotated_image_np, cv2.COLOR_BGRA2RGBA)
-    else:
-        # Grayscale or other formats, no conversion needed
-        annotated_image_np_rgb = annotated_image_np
-
-    # Convert NumPy array back to PIL Image
-    annotated_image = Image.fromarray(annotated_image_np_rgb)
-
-    return {"text_data": dets_string, "image_data": annotated_image}
-
-
-@pytest.fixture
-def sample_image_fixture():
-    """Provides a simple dummy image for testing."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    img = Image.open(os.path.join(current_dir, "cars.jpeg"))
-    return {"input_image": img}
-
-
-def test_basic_detection_integration(sample_image_fixture):
-    """Tests basic object detection call against the running API."""
-    # Call the function under test - this will make a real HTTP request
-    # Using classes unlikely to be in a plain red image might be safer
-    # depending on the actual model behavior. Let's use "object".
+    # 3. Prepare typed args (only image_name needed)
+    typed_args: TypedToolArgs = {}
     try:
-        result = detect_objects(
-            image_name="input_image",
-            # there should be cars, but no dogs
-            classes=["car", "dog"],
-            images=sample_image_fixture,
-        )
+        # Keep image_name as string
+        typed_args["image_name"] = raw_args["image_name"]
 
-        assert isinstance(result, dict)
-        assert "text_data" in result
-        assert "image_data" in result
-        assert isinstance(result["text_data"], str)
-        assert isinstance(result["image_data"], Image.Image)
+    except ValueError as e:
+        # Catch the list type error from above
+        raise ValueError(f"Error: processing 'classes': {e}")
+    except KeyError as e:
+        # Safeguard for missing keys during access
+        raise ValueError(f"Error: Missing key '{e}' during conversion phase.")
 
-        # visualize the annotated image
-        annotated_image = result["image_data"]
-        imgcat(annotated_image)
-
-        # visualize the text data
-        print(result["text_data"])
-
-    except requests.exceptions.ConnectionError as e:
-        pytest.fail(
-            f"API connection failed. Is the server running at http://{API_IP}:{API_PORT}? Error: {e}"
-        )
-    except Exception as e:
-        # Catch other potential errors during the API call or processing
-        pytest.fail(f"An unexpected error occurred: {e}")
+    return typed_args

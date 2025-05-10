@@ -63,7 +63,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> I'll collect as much visual evidence as possible from the image, and then consider all possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world. First, I'll consider the tool available to me and determine how to best call it to collect the evidence needed to answer the question.",
+                    "text": "\n<think> I'll collect as much visual evidence as possible from the image, and then consider all possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world. First, I'll consider the tools available to me and determine which one is most likely to help me collect the evidence needed to answer the question and how to best call it.",
                 }
             ],
         },

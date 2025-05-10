@@ -4,10 +4,10 @@ import torch
 from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
 from peft import LoraConfig, TaskType
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-from trl import GRPOConfig, ModelConfig
-from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 from r1_vlm.environments.tool_use_aokvqa_env.tool_use_aokvqa_env import AOKVQAToolEnv
+from trl import GRPOConfig, ModelConfig
+from trl.trainer.qwen_grpo_trainer import QwenGRPOTrainer
 
 os.environ["WANDB_ENTITY"] = "groundlightai"
 os.environ["WANDB_PROJECT"] = "tool-use-aokvqa-env"
@@ -91,8 +91,11 @@ def train():
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(gradient_checkpointing=True, use_peft=False)
     )
+    print("loaded model")
 
     vf_env = AOKVQAToolEnv(processing_class=processor, max_steps=3)
+
+    print("loaded env")
 
     train_dataset, val_dataset, test_dataset = vf_env.get_dataset()
 
@@ -103,17 +106,18 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-tool-use-aokvqa-env-reduced-beta-single-tool",
+        output_dir="/workspace/vlm-r1-aok-tool-use-with-new-recipie-may6-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
+        max_grad_norm=1.0,
         adam_beta2=0.98,
         lr_scheduler_type="cosine",
         warmup_steps=10,
         logging_steps=1,
-        save_steps=100,
+        save_steps=50,
         save_total_limit=10,
-        num_train_epochs=10,
-        per_device_train_batch_size=2,
+        num_train_epochs=1,
+        per_device_train_batch_size=1,
         num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
@@ -131,11 +135,12 @@ def train():
         use_vllm=True,
         vllm_gpu_memory_utilization=1.0,
         report_to="wandb",
-        vllm_device="cuda:3",
+        vllm_device="cuda:6",
         limit_image_per_prompt=2,
         # clipHigh strategy from DAPO paper
         epsilon_low=0.2,
-        epsilon_high=0.28,
+        # TODO: reduce to 0.28
+        epsilon_high=0.35,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
     )
@@ -148,6 +153,7 @@ def train():
         train_dataset=train_dataset,
         env=vf_env,
         peft_config=peft_config,
+        guided_regex=None,
     )
 
     trainer.train()
@@ -157,3 +163,4 @@ if __name__ == "__main__":
     train()
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_3only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 uv run accelerate launch --config_file src/r1_vlm/deepspeed_configs/multi_gpu_6only.yaml src/r1_vlm/environments/tool_use_aokvqa_env/tool_use_aok_train.py

@@ -1,5 +1,5 @@
 import inspect
-import json
+import random
 import traceback
 from typing import Any, Callable, Dict, List
 
@@ -10,7 +10,6 @@ from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.parsers import XMLParser
 
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
-from r1_vlm.tools.digits_answer_tool import get_answer
 from r1_vlm.tools.tool_prompts import DEFAULT_TOOL_PROMPT_TEMPLATE
 
 
@@ -26,12 +25,29 @@ def infer_schema_from_function(func: Callable) -> Dict[str, Any]:
     # Extract examples if present
     examples = []
     for part in doc_parts:
-        if part.startswith("Examples:"):
-            examples = [line.strip() for line in part.split("\n")[1:] if line.strip()]
+        if part.strip().startswith("Examples:"):
+            part_lines = part.split("\n")
+            examples_line_index = -1
+            for i, line in enumerate(part_lines):
+                if line.strip().startswith("Examples:"):
+                    examples_line_index = i
+                    break
+
+            if examples_line_index != -1:
+                lines_in_part = [
+                    line.strip()
+                    for line in part_lines[examples_line_index + 1 :]
+                    if line.strip()
+                ]
+                examples.extend(lines_in_part)
 
     # Build args schema
     args = {}
     for name, param in sig.parameters.items():
+        # Skip kwargs parameter
+        if name == "kwargs":
+            continue
+
         param_doc = ""
         for part in doc_parts:
             if part.strip().startswith("Args:"):
@@ -86,10 +102,19 @@ def format_tool_descriptions(schemas: List[Dict[str, Any]]) -> str:
     return "\n\n".join(descriptions)
 
 
+# Define the expected structure for the general parser's output
+RawToolArgs = Dict[str, str]
+# Define the expected structure for the specific parser's output
+TypedToolArgs = Dict[str, Any]
+# Define the type hint for the specific parser function
+ToolArgParser = Callable[[RawToolArgs], TypedToolArgs]
+
+
 class ToolVisionEnv(MultistepVisionEnv):
     def __init__(
         self,
-        tools: List[Callable],
+        # Expect a list of (tool_function, tool_argument_parser) tuples
+        tools_with_parsers: List[tuple[Callable, ToolArgParser]],
         processing_class: AutoProcessor,
         sampling_args={
             "stop": ["</tool>", "</answer>"],
@@ -98,6 +123,8 @@ class ToolVisionEnv(MultistepVisionEnv):
         mask_env_response: bool = True,
         max_steps: int = 10,
         tool_prompt_template: str = DEFAULT_TOOL_PROMPT_TEMPLATE,
+        # Allow passing a custom general parser if needed, default to _general_parse_key_value
+        general_parser: Callable[[str], RawToolArgs] | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -107,16 +134,25 @@ class ToolVisionEnv(MultistepVisionEnv):
             **kwargs,
         )
 
-        # Infer schemas from tool functions
-        self.tool_schemas = [infer_schema_from_function(tool) for tool in tools]
-        self.tools = {tool.__name__: tool for tool in tools}
+        # Store tools and parsers, keyed by tool name
+        self.tools: Dict[str, Callable] = {}
+        self.tool_parsers: Dict[str, ToolArgParser] = {}
+        self.tool_schemas: List[Dict[str, Any]] = []
 
-        # Format the system prompt with tool descriptions
-        tool_descriptions = format_tool_descriptions(self.tool_schemas)
-        formatted_prompt = tool_prompt_template.format(
-            tool_descriptions=tool_descriptions
-        )
-        self.formatted_prompt = formatted_prompt
+        for tool_func, parser_func in tools_with_parsers:
+            tool_name = tool_func.__name__
+            if tool_name in self.tools:
+                raise ValueError(f"Duplicate tool name found: {tool_name}")
+            self.tools[tool_name] = tool_func
+            self.tool_parsers[tool_name] = parser_func
+            # Schema inference still uses the tool function's signature/docstring
+            self.tool_schemas.append(infer_schema_from_function(tool_func))
+
+        # Store the template for dynamic formatting later
+        self.tool_prompt_template = tool_prompt_template
+
+        # Set the general parser (use internal default if none provided)
+        self.general_parser = general_parser or self._general_parse_key_value
 
         # will be used to parse responses from the model. Each response is expected to have a "think" and either a
         # "tool" or "answer" field.
@@ -149,11 +185,23 @@ class ToolVisionEnv(MultistepVisionEnv):
                 if not messages or messages[0]["role"] != "system":
                     raise ValueError("Expected first message to be a system message")
 
+                # Create a shuffled copy of tool schemas for this sample
+                shuffled_schemas = self.tool_schemas[:]  # Create a copy
+                random.shuffle(shuffled_schemas)
+
+                # Format tool descriptions with the shuffled order
+                tool_descriptions = format_tool_descriptions(shuffled_schemas)
+
+                # Format the prompt template with the randomized descriptions
+                formatted_prompt = self.tool_prompt_template.format(
+                    tool_descriptions=tool_descriptions
+                )
+
                 # Replace the content of the system message with the formatted prompt
                 messages[0]["content"] = [
                     {
                         "type": "text",
-                        "text": self.formatted_prompt,
+                        "text": formatted_prompt,
                     }
                 ]
 
@@ -202,48 +250,58 @@ class ToolVisionEnv(MultistepVisionEnv):
 
     def call_tool(
         self,
-        tool_json: str,
+        tool_text_blob: str,
         messages: List[Dict[str, str]],
         images: Dict[str, Image],
         **kwargs: Any,
     ) -> str | Image | dict:
         """
-        Call a tool based on JSON command.
-        All tools are passed messages as a kwarg.
-        All tools are passed images as a kwarg - a dictionary of image names -> PIL images.
+        Call a tool based on the simple key-value text format.
+        1. Use general parser to get raw key-value strings.
+        2. Use tool-specific registered parser to validate and type-convert args.
+        3. Call the actual tool function.
         """
-
+        tool_name = "unknown"  # Initialize for error messages
         try:
-            command = json.loads(tool_json)
-            if not isinstance(command, dict):
-                return "Error: Tool command must be a JSON object"
+            # Stage 1: General Parsing using the configured general parser
+            raw_args = self.general_parser(tool_text_blob)
 
-            tool_name = command.get("name")
+            tool_name = raw_args.get("name")
             if not tool_name:
-                return "Error: Tool command must specify 'name'"
-
+                return "Error: Tool call must specify 'name' in key-value format."
             if tool_name not in self.tools:
-                return f"Error: Unknown tool '{tool_name}'"
+                return f"Error: Unknown tool '{tool_name}' specified. Valid tools are: {', '.join(self.tools.keys())}"
 
+            # Stage 2: Tool-Specific Parsing & Validation (using registered parser)
+            if tool_name not in self.tool_parsers:
+                # This indicates a configuration error in __init__
+                raise ValueError(
+                    f"CRITICAL ERROR: Parser not found for registered tool '{tool_name}'. Check __init__ configuration. Existing tool parsers: {self.tool_parsers.keys()}"
+                )
+
+            parser_func = self.tool_parsers[tool_name]
+            # Pass raw_args (which includes 'name') to the specific parser
+            typed_args = parser_func(raw_args)  # This might raise ValueError
+
+            # Stage 3: Call Actual Tool
             tool_func = self.tools[tool_name]
-            tool_args = command.get("args", {})
+            # Prepare kwargs for the actual tool call (runtime context)
+            tool_kwargs = {"messages": messages, "images": images}
+            # Call the tool with validated, typed args AND the runtime context
+            result = tool_func(**typed_args, **tool_kwargs)
 
-            kwargs = {}
-            kwargs["messages"] = messages
-            kwargs["images"] = images
-
-            # Call the tool function with arguments
-            result = tool_func(**tool_args, **kwargs)
             if isinstance(result, (str, Image, dict)):
                 return result
             else:
-                # Convert other types to string as a fallback
-                return str(result)
-        except json.JSONDecodeError:
-            return "Error: Invalid JSON format"
+                return str(result)  # Fallback conversion
+
+        except ValueError as e:  # Catch validation errors from specific parsers
+            # Include the specific failing key/value if possible from the error message
+            return f"Error: Parsing arguments for tool '{tool_name}': {str(e)}"
         except Exception as e:
             traceback.print_exc()
-            return f"Error: {str(e)}"
+            # Provide more context in the error returned to the LLM
+            return f"Error: During execution of tool '{tool_name}': {str(e)}"
 
     def env_response(
         self, messages: List[Dict[str, Any]], **kwargs: Any
@@ -271,7 +329,7 @@ class ToolVisionEnv(MultistepVisionEnv):
                 images = self._conversation_to_image_dict(messages)
 
                 result = self.call_tool(
-                    tool_json=parsed.tool, messages=messages, images=images
+                    tool_text_blob=parsed.tool, messages=messages, images=images
                 )
                 if isinstance(result, Image):
                     response = {
@@ -299,22 +357,36 @@ class ToolVisionEnv(MultistepVisionEnv):
                     and "text_data" in result
                     and "image_data" in result
                 ):
-                    response = {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>",
-                            },
-                            {"type": "image", "image": result["image_data"]},
-                            {
-                                "type": "text",
-                                "text": self.env_parser.format(
-                                    result=result["text_data"]
-                                ),
-                            },
-                        ],
-                    }
+                    text_data = result["text_data"]
+                    image_data = result["image_data"]
+
+                    if image_data is None:
+                        response = {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": self.env_parser.format(result=text_data),
+                                }
+                            ],
+                        }
+                    else:
+                        response = {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"<image_name> tool_result_{self._get_step_count(messages) // 2} </image_name>",
+                                },
+                                {"type": "image", "image": result["image_data"]},
+                                {
+                                    "type": "text",
+                                    "text": self.env_parser.format(
+                                        result=result["text_data"]
+                                    ),
+                                },
+                            ],
+                        }
                 else:
                     response = {
                         "role": "user",
@@ -393,6 +465,18 @@ class ToolVisionEnv(MultistepVisionEnv):
 
         return (hasattr(parsed, "answer") and parsed.answer is not None) or has_eos
 
-
-if __name__ == "__main__":
-    ToolVisionEnv(tools=[get_answer], processing_class=None)
+    def _general_parse_key_value(self, text_blob: str) -> RawToolArgs:
+        """Parses simple 'key: value' lines into a dictionary of strings."""
+        args: RawToolArgs = {}
+        # Handle potential empty input after stripping <tool> tags
+        if not text_blob.strip():
+            return args
+        lines = text_blob.strip().split("\n")
+        for line in lines:
+            line = line.strip()
+            if not line or ": " not in line:
+                # Skip empty lines or lines without the separator
+                continue
+            key, value_str = line.split(": ", 1)
+            args[key.strip()] = value_str.strip()
+        return args

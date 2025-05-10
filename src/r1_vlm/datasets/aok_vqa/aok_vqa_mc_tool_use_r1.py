@@ -1,4 +1,5 @@
 from datasets import Dataset, DatasetDict, load_dataset
+from PIL import Image
 from tqdm import tqdm
 
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
@@ -7,7 +8,7 @@ from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 def generate_r1_messages(example):
     # unpack the example
 
-    image = example["image"]
+    image: Image.Image = example["image"]
     question_id = example["question_id"]
     question = example["question"]
     choices = example["choices"]
@@ -18,6 +19,8 @@ def generate_r1_messages(example):
     direct_answers = example.get("direct_answers", None)
     rationales = example.get("rationales", None)
 
+    image_size = image.size
+
     # denormalize the multiple choice answer if it exists for ease of use down the line
     multiple_choice_answer = (
         choices[correct_choice_idx] if correct_choice_idx is not None else None
@@ -25,19 +28,15 @@ def generate_r1_messages(example):
 
     system_prompt = "REPLACED WITH TOOLS SYSTEM PROMPT"
 
-    choices_str = "Possible answers: "
+    choices_str = "Possible answers: \n"
     for i, choice in enumerate(choices):
-        if i == len(choices) - 1:
-            choices_str += f"or {choice}."
-        else:
-            choices_str += f"{choice}, "
+        choices_str += f"- {choice}\n"
 
-    instruction = f"""
-    {question}
-
+    instruction = f"""  
+    The image size is {image_size}.
+    Question: {question}
     {choices_str}
-    
-    You must use the tools to inspect the input image and gather visual evidence.
+    After thinking about the question and the possible answers, your need to select the most likely answer from the list and return it in <answer> </answer> tags.
     """
 
     r1_messages = [
@@ -63,7 +62,7 @@ def generate_r1_messages(example):
             "content": [
                 {
                     "type": "text",
-                    "text": "\n<think> I'll collect as much visual evidence as possible from the image, and then consider all possible answers. Then, I'll select the most likely answer based on the evidence and my knowledge of the world. First, I'll consider the tools available to me and determine which one is most likely to help me collect the evidence needed to answer the question and how to best call it.",
+                    "text": "\n<think> ",
                 }
             ],
         },
