@@ -134,10 +134,11 @@ if __name__ == "__main__":
                 "model_answer": model_answer,
             }
             result = evaluate_result(result)
+
+            with open(results_file_path, "a") as f:
+                f.write(json.dumps(result) + "\n")
+
             results.append(result)
 
         current_score = evaluate(results)
         print(f"Current score: {current_score}")
-
-        with open(results_file_path, "a") as f:
-            f.write(json.dumps(result) + "\n")
