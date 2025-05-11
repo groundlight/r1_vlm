@@ -9,6 +9,9 @@ from r1_vlm.environments.tool_use_text_vqa_env.tool_use_text_vqa_env import (
 
 def add_vqa_scores(results: list[dict]):
     for result in results:
+        if "vqa_score" in result:
+            continue
+
         model_answer = result["model_answer"]
         correct_answers = result["answers"]
         model_answer, correct_answers = normalize_answer(model_answer, correct_answers)
@@ -25,7 +28,13 @@ def add_vqa_scores(results: list[dict]):
 
 
 if __name__ == "__main__":
-    trained_model_eval = "/millcreek/home/sunil/r1_vlm/successful_run_hard_data_may9/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B/checkpoint-800_generations.json"
+    # zoom model
+    trained_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_zoom_step800_validation_results.jsonl"
+
+    # baseline model
+    # trained_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/simple_text_vqa_env/eval_baseline_step800_validation_results.jsonl"
+
+    # base model
     base_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/base_eval_on_validation_results.jsonl"
 
     base_model_results = []
@@ -37,6 +46,7 @@ if __name__ == "__main__":
     with open(trained_model_eval, "r") as f:
         for line in f:
             trained_model_results.append(json.loads(line))
+
     trained_model_results = add_vqa_scores(trained_model_results)
 
     print(f"length of base model results: {len(base_model_results)}")
@@ -112,3 +122,31 @@ if __name__ == "__main__":
     print(
         f"Average trained model score on base examples with zero score: {total_trained_model_score_on_base_examples_with_zero_score / total_base_examples_with_zero_score} on {total_base_examples_with_zero_score} examples"
     )
+
+    # plot the trained model's score on the zero score examples over the course of evaluation
+    datapoints = []
+    running_score = None
+    total_count = 0
+    for result in all_results:
+        if result["base_model_result"] > 0.0:
+            continue
+
+        total_count += 1
+
+        score = result["trained_model_result"]
+
+        if running_score is None:
+            running_score = score
+        else:
+            running_score += score
+
+        datapoints.append(running_score / total_count)
+
+    from imgcat import imgcat
+    from matplotlib import pyplot as plt
+
+    xs = list(range(total_count))
+    plt.plot(xs, datapoints)
+    plt.savefig("/tmp/plot.png")
+    with open("/tmp/plot.png", "rb") as img_file:
+        imgcat(img_file.read())
