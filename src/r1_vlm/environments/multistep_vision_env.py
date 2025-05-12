@@ -244,11 +244,18 @@ class MultistepVisionEnv(Environment):
         num_steps_taken = 0
         total_steps = 2
 
+        # flag to turn on/off structured output on the last step
+        should_use_structured_output_last_step = False
+
         # main loop
         while not all_completed:
-            sp_to_use = (
-                custom_sp if num_steps_taken < total_steps - 1 else custom_sp_last_step
-            )
+            if (
+                num_steps_taken < total_steps - 1
+                or not should_use_structured_output_last_step
+            ):
+                sp_to_use = custom_sp
+            else:
+                sp_to_use = custom_sp_last_step
 
             states = self.step(states, vlm, sp_to_use)
             all_completed = all(state["completed"] for state in states)

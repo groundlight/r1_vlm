@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from copy import deepcopy
 
 from tqdm import tqdm
 from transformers import AutoProcessor
@@ -63,7 +64,7 @@ def evaluate(results: list[dict]):
 
 if __name__ == "__main__":
     MODEL_PATH = "/millcreek/home/sunil/r1_vlm/successful_run_hard_data_may9/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B/checkpoint-800"
-    results_file_path = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_zoom_step800_validation_results.jsonl"
+    results_file_path = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_zoom_step800_validation_results_no_structured_output_5shot_demo.jsonl"
 
     vlm = LLM(
         model=MODEL_PATH,
@@ -84,7 +85,8 @@ if __name__ == "__main__":
     datasets = env.get_dataset(splits=["validation"])
     dataset = datasets["validation"]
 
-    batch_size = 6  # 24
+    # 5 shot validation
+    batch_size = 5
     batches = []
 
     results = []
@@ -98,13 +100,8 @@ if __name__ == "__main__":
         if example["question_id"] in question_ids_to_skip:
             # we don't need to evaluate on examples that have already been evaluated (allows for restarting)
             continue
-
-        if len(batches) == 0:
-            batches.append([example])
-        elif len(batches[-1]) < batch_size:
-            batches[-1].append(example)
         else:
-            batches.append([example])
+            batches.append([deepcopy(example) for _ in range(batch_size)])
 
     for batch in tqdm(batches):
         conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
