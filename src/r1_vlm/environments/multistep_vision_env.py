@@ -9,6 +9,7 @@ from transformers import AutoProcessor
 from trl.trainer.grpo_trainer import RewardFunc
 from verifiers.envs.environment import Environment
 from vllm import LLM, SamplingParams  # type: ignore
+from vllm.sampling_params import GuidedDecodingParams
 
 from r1_vlm.environments.simple_vision_env import prepare_inputs_for_env
 
@@ -57,7 +58,7 @@ class MultistepVisionEnv(Environment):
     @abstractmethod
     def env_response(
         self, messages: list[dict[str, str]], **kwargs: Any
-    ) ->  list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         pass
 
     def prepare_data(self, *, inputs, processing_class):
@@ -96,12 +97,16 @@ class MultistepVisionEnv(Environment):
                 state["prompt_ids"] = vlm_response.prompt_token_ids
 
             # update the conversation with the model's response
-            state["messages"].append({
-                "role": "assistant", 
-                "content": [
-                    {"text": vlm_response.outputs[0].text, "type": "text"}
-                ]
-            })
+            state["messages"].append(
+                {
+                    "role": "assistant",
+                    "content": [{"text": vlm_response.outputs[0].text, "type": "text"}],
+                }
+            )
+
+            # Backup previous token updates for potential backtracking
+            prev_completion_ids = state["completion_ids"][:]
+            prev_completion_mask = state["completion_mask"][:]
 
             # get token lengths of env response and new completion
             total_prev_len = len(state["prompt_ids"]) + len(state["completion_ids"])
@@ -120,7 +125,7 @@ class MultistepVisionEnv(Environment):
             ]
 
             # if we are done, we mark the state as completed
-            # we do not want to truncate the completion ids here, 
+            # we do not want to truncate the completion ids here,
             # because the number of image tokens returned from the tools is variable
             if (
                 self.is_completed(state["messages"])
@@ -131,7 +136,25 @@ class MultistepVisionEnv(Environment):
             # otherwise, we get the env response
             else:
                 env_response_messages = self.env_response(state["messages"])
-                state["messages"].extend(env_response_messages)
+
+                # check if the env response is valid
+                if not self.validate_env_response(env_response_messages):
+                    # Backtracking: revert token/mask updates and remove the last generated assistant message
+
+                    print(
+                        "Backtracking during generation. Found error in env response."
+                    )
+                    print(
+                        f"The model generated the following text: {vlm_response.outputs[0].text}"
+                    )
+                    print(f"And the env response was: {env_response_messages}")
+
+                    state["completion_ids"] = prev_completion_ids
+                    state["completion_mask"] = prev_completion_mask
+                    state["messages"].pop()
+
+                else:
+                    state["messages"].extend(env_response_messages)
 
             if not len(state["completion_mask"]) == len(state["completion_ids"]):
                 print(state["messages"])
@@ -153,16 +176,57 @@ class MultistepVisionEnv(Environment):
 
         for j, state in results:
             states[j] = state
-            
+
         return states
+
+    def validate_env_response(self, env_response_messages):
+        # disables validation of env response
+        return True
+
+        contains_error = []
+
+        # iterate over each actor in the env respopnse
+        for element in env_response_messages:
+            if element["role"] == "user":
+                for message in element["content"]:
+                    if message["type"] == "text":
+                        if any(
+                            error in message["text"]
+                            for error in ["Error", "Error:", "error", "error:"]
+                        ):
+                            contains_error.append(True)
+                        else:
+                            contains_error.append(False)
+            else:
+                # Non assistant messages do not contain errors
+                contains_error.append(False)
+
+        print(
+            f"For the env response: {env_response_messages}, found error: {any(contains_error)}"
+        )
+
+        return not any(contains_error)
 
     def generate(
         self, conversations, vlm_inputs, vlm: LLM, sampling_params: SamplingParams
     ) -> list[list[dict[str, Any]]]:
+        import time
+
+        start_time = time.time()
         custom_sp = sampling_params.clone()
         for k, v in self.sampling_args.items():
             setattr(custom_sp, k, v)
 
+        custom_sp_last_step = custom_sp.clone()
+
+        full_regex = r"([^<]*)</think>([^<]*)<answer>([^<]*)</answer>"
+
+        guided_decoding_params = GuidedDecodingParams(regex=full_regex)
+
+        custom_sp_last_step.guided_decoding = guided_decoding_params
+
+        stop_time = time.time()
+        print(f"Time taken to set up sampling params: {stop_time - start_time} seconds")
         # initialize state variables
         all_completed = False
         states = [
@@ -176,11 +240,26 @@ class MultistepVisionEnv(Environment):
             }
             for conversation in conversations
         ]
-    
+
+        num_steps_taken = 0
+        total_steps = 2
+
+        # flag to turn on/off structured output on the last step
+        should_use_structured_output_last_step = False
+
         # main loop
         while not all_completed:
-            states = self.step(states, vlm, custom_sp)
+            if (
+                num_steps_taken < total_steps - 1
+                or not should_use_structured_output_last_step
+            ):
+                sp_to_use = custom_sp
+            else:
+                sp_to_use = custom_sp_last_step
+
+            states = self.step(states, vlm, sp_to_use)
             all_completed = all(state["completed"] for state in states)
+            num_steps_taken += 1
 
         completion_messages = [s["messages"][s["prompt_messages"] :] for s in states]
         completion_ids = [s["completion_ids"] for s in states]
@@ -190,8 +269,7 @@ class MultistepVisionEnv(Environment):
             "messages": completion_messages,
             "mask": completion_mask,
         }
-        
-        
+
         def clean_messages_for_logging(messages):
             cleaned = []
             images = []
@@ -201,7 +279,10 @@ class MultistepVisionEnv(Environment):
                     cleaned_content = []
                     for item in cleaned_message["content"]:
                         cleaned_item = item.copy()
-                        if "image" in cleaned_item and cleaned_item["image"] is not None:
+                        if (
+                            "image" in cleaned_item
+                            and cleaned_item["image"] is not None
+                        ):
                             images.append(cleaned_item["image"])
                             cleaned_item["image"] = "<PIL.Image object>"
                         cleaned_content.append(cleaned_item)
@@ -209,31 +290,38 @@ class MultistepVisionEnv(Environment):
                 cleaned.append(cleaned_message)
             return cleaned, images
 
-        cleaned_messages, images = clean_messages_for_logging(states[0]["messages"])
+        for i, state in enumerate(states):
+            cleaned_messages, images = clean_messages_for_logging(state["messages"])
+            self.logger.info(
+                f"Full conversation {i}:\n" + json.dumps(cleaned_messages, indent=4)
+            )
+            for image in images:
+                try:
+                    imgcat.imgcat(image)
+                except Exception as e:
+                    print(
+                        f"Caught failed imgcat call for image. As this is just a debugging print, we will not raise an error. {e}"
+                    )
 
-        self.logger.info(
-            "Full conversation 0:\n"
-            + json.dumps(cleaned_messages, indent=4)
-        )
-        for image in images:
-            imgcat.imgcat(image)
-        
         return output
-    
+
     @staticmethod
-    def preprocess_messages(prompts_messages: list[list[dict[str, Any]]], completions_messages: list[list[dict[str, Any]]]) -> list[list[dict[str, Any]]]:
-        '''
+    def preprocess_messages(
+        prompts_messages: list[list[dict[str, Any]]],
+        completions_messages: list[list[dict[str, Any]]],
+    ) -> list[list[dict[str, Any]]]:
+        """
         1. Combines prompts and completion messages into full conversations
         2. Removes all messages before the first assistant message, leaving only the completion
         3. Merges elements of the completion that come from the same source and are text only
-        
+
         Args:
             prompts: list of prompt conversations
             completions_messages: list of completion conversations
-            
+
         Returns:
             list of preprocessed completion conversations
-        '''    
+        """
         # Combine prompts and completions into full conversations
         combined_messages = []
         for prompt_msgs, completion_msgs in zip(prompts_messages, completions_messages):
@@ -241,22 +329,29 @@ class MultistepVisionEnv(Environment):
             conversation.extend(prompt_msgs)
             conversation.extend(completion_msgs)
             combined_messages.append(conversation)
-        
+
         filtered_messages = []
         for completion in combined_messages:
             # find the index of the first assistant message
-            assistant_message_index = next((i for i, message in enumerate(completion) if message["role"] == "assistant"), None)
-            
+            assistant_message_index = next(
+                (
+                    i
+                    for i, message in enumerate(completion)
+                    if message["role"] == "assistant"
+                ),
+                None,
+            )
+
             if assistant_message_index is not None:
                 # keep only messages from the first assistant message onwards
                 filtered_messages.append(completion[assistant_message_index:])
-        
+
         merged_completions = []
-        
+
         for completion in filtered_messages:
             merged_completion = []
             current_message = None
-            
+
             for message in completion:
                 # If message has non-text content, add it as is
                 if any(item["type"] != "text" for item in message["content"]):
@@ -265,7 +360,7 @@ class MultistepVisionEnv(Environment):
                         current_message = None
                     merged_completion.append(message)
                     continue
-                    
+
                 # For text messages
                 if current_message and current_message["role"] == message["role"]:
                     # Merge text content
@@ -277,11 +372,21 @@ class MultistepVisionEnv(Environment):
                         merged_completion.append(current_message)
                     current_message = {
                         "role": message["role"],
-                        "content": [{"type": "text", "text": message["content"][0]["text"]}]
+                        "content": [
+                            {"type": "text", "text": message["content"][0]["text"]}
+                        ],
                     }
-            
+
             if current_message:
                 merged_completion.append(current_message)
             merged_completions.append(merged_completion)
-        
+
         return merged_completions
+
+    def log_metrics(self, data):
+        """
+        Callback for logging metrics. Can be implemented by subclasses.
+
+        Should return a dictionary of metrics (key = metric name, value = metric value)
+        """
+        return {}

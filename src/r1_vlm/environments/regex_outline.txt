@@ -1,0 +1,13 @@
+
+1. Message 1 - either the model ends in an answer or a tool
+a. text </think> <tool> tool regex </tool>
+b. text </think> <answer> text </answer>
+
+2. Message 2 - if the model ends message 1 in a tool, then message 2 is the answer
+<think> text </think> <answer> text </answer>
+
+
+{think section without open think | think section with open think} {tool section | answer section}
+
+tool section:
+{ zoom tool | detect objects tool }

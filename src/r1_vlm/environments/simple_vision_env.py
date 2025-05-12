@@ -4,12 +4,12 @@ from typing import Any, Dict, List, Sequence, Union
 
 import imgcat
 from qwen_vl_utils import process_vision_info
+from verifiers import SimpleEnv
 from vllm import LLM, SamplingParams  # type: ignore
 
 from r1_vlm.budget_forcing.budget_forcing import (
     generate_completions_with_budget_forcing,
 )
-from verifiers import SimpleEnv
 
 
 class SimpleVisionEnv(SimpleEnv):
@@ -93,7 +93,7 @@ class SimpleVisionEnv(SimpleEnv):
             completions = vlm.generate(
                 vlm_inputs, sampling_params=custom_sp, use_tqdm=False
             )  # type: ignore
-            
+
             stop_reasons = [c.outputs[0].stop_reason for c in completions]
             print(f"Stop reasons: {stop_reasons}")
 
@@ -143,7 +143,12 @@ class SimpleVisionEnv(SimpleEnv):
             + json.dumps(states[0]["messages"][-1], indent=4)
         )
         for image in images:
-            imgcat.imgcat(image)
+            try:
+                imgcat.imgcat(image)
+            except Exception as e:
+                print(
+                    f"Error logging imgcat-ing image: {e}. Swallowing error to avoid crashing the run."
+                )
 
         completion_ids = [states[i]["completion_ids"] for i in range(len(states))]
         completion_messages = [states[i]["messages"][-1:] for i in range(len(states))]
@@ -165,6 +170,14 @@ class SimpleVisionEnv(SimpleEnv):
         )
 
         return conversations, texts, batch, vllm_inputs
+
+    def log_metrics(self, data):
+        """
+        Callback for logging metrics. Can be implemented by subclasses.
+
+        Should return a dictionary of metrics (key = metric name, value = metric value)
+        """
+        return {}
 
 
 def prepare_inputs_for_env(*, inputs, processing_class):

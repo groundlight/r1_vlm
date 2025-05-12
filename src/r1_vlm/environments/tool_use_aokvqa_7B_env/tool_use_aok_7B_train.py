@@ -118,8 +118,8 @@ def train():
         save_steps=50,
         save_total_limit=3,
         num_train_epochs=10,
-        per_device_train_batch_size=2,
-        num_generations=12,
+        per_device_train_batch_size=1,
+        num_generations=6,
         gradient_accumulation_steps=4,
         gradient_checkpointing=gradient_checkpointing,
         bf16=True,
@@ -143,6 +143,8 @@ def train():
         epsilon_high=0.28,
         # reward weights with schedules for some of the reward functions
         reward_weights=reward_weights,
+        # clip gradients to avoid exploding gradients
+        max_grad_norm=1.0,
     )
 
     trainer = QwenGRPOTrainer(
