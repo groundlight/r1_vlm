@@ -10,7 +10,7 @@ dependencies = [
     "mobileclip",
     "tritonclient[all]>=2.56.0",
     "ultralytics>=8.3.112",
-    "onnx==1.16.0",
+    "onnx==1.17.0",
     "tensorrt>=10.9.0.34",
     "onnxslim>=0.1.50",
     "onnxruntime-gpu>=1.21.1",
