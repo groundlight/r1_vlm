@@ -48,6 +48,11 @@ class SimpleVStarEvalEnv(SimpleVisionEnv):
         dataset = preprocess_r1_dataset(dataset)
         return dataset
 
+    def get_rubric(self):
+        raise NotImplementedError(
+            "get_rubric is not implemented for SimpleVStarEvalEnv because the env is used for evaluation only"
+        )
+
 class VStarToolEnv(ToolVisionEnv):
     def __init__(
         self,
