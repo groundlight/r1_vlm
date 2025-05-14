@@ -7,7 +7,7 @@ from datasets import load_dataset, Dataset
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
 from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import resize_image
 
-def generate_simple_vstar_messages(example: dict, benchmark_directory: str, max_size: int | None = None) -> dict[str, Any]:
+def generate_vstar_tool_use_messages(example: dict, benchmark_directory: str, max_size: int | None = None) -> dict[str, Any]:
     question = example["text"]
     image_path = os.path.join(benchmark_directory, example["image"])
     image = Image.open(image_path)
@@ -65,7 +65,7 @@ def create_r1_vstar_tool_use_dataset(benchmark_directory: str, max_size: int | N
     dataset = load_dataset("craigwu/vstar_bench", split="test")
     processed_datasets = []
     for example in tqdm(dataset, desc="Processing V*-bench dataset"):
-        processed_datasets.append(generate_simple_vstar_messages(example, benchmark_directory, max_size))
+        processed_datasets.append(generate_vstar_tool_use_messages(example, benchmark_directory, max_size))
 
     return Dataset.from_list(processed_datasets)
 

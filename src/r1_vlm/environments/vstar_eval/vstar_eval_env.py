@@ -17,6 +17,7 @@ from r1_vlm.environments.tool_use_text_vqa_env.find_examples_for_training import
     find_examples_for_training,
 )
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
+from r1_vlm.datasets.vstar.vstar_base_for_eval import create_r1_vstar_simple_dataset
 from r1_vlm.datasets.vstar.vstar_tool_use_r1 import create_r1_vstar_tool_use_dataset
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED
 from r1_vlm.tools.zoom import parse_zoom_args, zoom
@@ -25,11 +26,11 @@ from r1_vlm.tools.zoom import parse_zoom_args, zoom
 class SimpleVStarEvalEnv(SimpleVisionEnv):
     def __init__(
         self,
-        dataset_name: str = None,
+        benchmark_directory: str,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.dataset_name = dataset_name
+        self.benchmark_directory = benchmark_directory
         self.parser = XMLParser(fields=["think", "answer"])
         self._fields = [
             ("think", ["think"]),
@@ -39,8 +40,13 @@ class SimpleVStarEvalEnv(SimpleVisionEnv):
     def parse(self, text: str, strip: bool = True):
         return self.parser.parse(text, strip=strip)
 
-    def get_dataset(self) -> Dataset:
-        raise NotImplementedError("V*-bench is not implemented yet")
+    def get_dataset(self, max_size: int | None = None) -> Dataset:
+        dataset = create_r1_vstar_simple_dataset(
+            benchmark_directory=self.benchmark_directory,
+            max_size=max_size,
+        )
+        dataset = preprocess_r1_dataset(dataset)
+        return dataset
 
 class VStarToolEnv(ToolVisionEnv):
     def __init__(
