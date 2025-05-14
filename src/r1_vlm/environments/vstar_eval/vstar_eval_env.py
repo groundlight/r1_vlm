@@ -1,0 +1,84 @@
+import json
+import re
+from typing import Any, Callable
+
+from PIL import Image
+from transformers import AutoProcessor
+from datasets import Dataset
+from verifiers.parsers import XMLParser
+
+from r1_vlm.datasets.text_vqa.text_vqa_r1 import (
+    create_r1_text_vqa_dataset,
+)
+from r1_vlm.datasets.utils import preprocess_r1_dataset
+from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.simple_vision_env import SimpleVisionEnv
+from r1_vlm.environments.tool_use_text_vqa_env.find_examples_for_training import (
+    find_examples_for_training,
+)
+from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
+from r1_vlm.datasets.vstar.vstar_tool_use_r1 import create_r1_vstar_tool_use_dataset
+from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED
+from r1_vlm.tools.zoom import parse_zoom_args, zoom
+
+
+class SimpleVStarEvalEnv(SimpleVisionEnv):
+    def __init__(
+        self,
+        dataset_name: str = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.dataset_name = dataset_name
+        self.parser = XMLParser(fields=["think", "answer"])
+        self._fields = [
+            ("think", ["think"]),
+            ("answer", ["answer"]),
+        ]
+
+    def parse(self, text: str, strip: bool = True):
+        return self.parser.parse(text, strip=strip)
+
+    def get_dataset(self) -> Dataset:
+        raise NotImplementedError("V*-bench is not implemented yet")
+
+class VStarToolEnv(ToolVisionEnv):
+    def __init__(
+        self,
+        processing_class: AutoProcessor,
+        benchmark_directory: str,
+        tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
+            (zoom, parse_zoom_args),
+        ],
+        max_steps: int = 3,
+        tool_prompt_template: str = SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED,
+    ):
+        super().__init__(
+            processing_class=processing_class,
+            tools_with_parsers=tools_with_parsers,
+            max_steps=max_steps,
+            tool_prompt_template=tool_prompt_template,
+        )
+
+        self.benchmark_directory = benchmark_directory
+        self.parser = XMLParser(fields=["think", "answer", "tool"])
+        self._fields = [
+            ("think", ["think"]),
+            ("answer", ["answer"]),
+            ("tool", ["tool"]),
+        ]
+
+    def parse(self, text: str, strip: bool = True):
+        return self.parser.parse(text, strip=strip)
+
+    def get_dataset(
+        self,
+        max_size: int = 1024,
+    ) -> Dataset:
+        dataset = create_r1_vstar_tool_use_dataset(
+            benchmark_directory=self.benchmark_directory,
+            max_size=max_size,
+        )
+        dataset = self.inject_system_prompt(dataset)
+        dataset = preprocess_r1_dataset(dataset)
+        return dataset

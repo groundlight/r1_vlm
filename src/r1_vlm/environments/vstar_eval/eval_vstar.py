@@ -8,10 +8,7 @@ from datasets import load_dataset, Dataset
 from vllm import LLM, SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 from r1_vlm.datasets.utils import IMAGE_PLACEHOLDER
-from r1_vlm.environments.simple_text_vqa_env.simple_text_vqa_env import (
-    SimpleTextVQAEnv,
-    normalize_answer,
-)
+from r1_vlm.environments.vstar_eval.vstar_eval_env import VStarToolEnv
 
 from tqdm import tqdm
 
@@ -51,7 +48,7 @@ def generate_simple_vstar_messages(example: dict, benchmark_directory: str) -> d
         "question_id": example["question_id"],
     }
 
-def generate_completions(args: argparse.Namespace, dataset: Dataset):
+def generate_completions(args: argparse.Namespace):
     vlm = LLM(
         model=args.model_path,
         gpu_memory_utilization=0.9,
@@ -61,27 +58,24 @@ def generate_completions(args: argparse.Namespace, dataset: Dataset):
         limit_mm_per_prompt={"image": args.limit_image_per_prompt, "video": 0},
     )
     processor = AutoProcessor.from_pretrained(args.model_path)
-    env = SimpleTextVQAEnv(processing_class=processor)
+    env = VStarToolEnv(processing_class=processor, benchmark_directory=args.benchmark_directory)
+    dataset = env.get_dataset()
 
     sampling_params = SamplingParams(
         temperature=args.temperature,
         max_tokens=args.max_tokens,
-        guided_decoding=GuidedDecodingParams(
-            choice=["A", "B", "C", "D"],
-        ),
     )
 
     batch_size = args.batch_size
     batches = []
 
     for example in dataset:
-        processed_example = generate_simple_vstar_messages(example, args.benchmark_directory)
         if len(batches) == 0:
-            batches.append([processed_example])
+            batches.append([example])
         elif len(batches[-1]) < batch_size:
-            batches[-1].append(processed_example)
+            batches[-1].append(example)
         else:
-            batches.append([processed_example])
+            batches.append([example])
 
     results = []
     for batch in tqdm(batches):
@@ -122,15 +116,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default="Qwen/Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--benchmark_directory", type=str, default="/millcreek/data/vstar_bench")
-    parser.add_argument("--limit_image_per_prompt", type=int, default=1)
+    parser.add_argument("--limit_image_per_prompt", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max_tokens", type=int, default=2048)
-    parser.add_argument("--batch_size", type=int, default=12)
+    parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--tensor_parallel_size", type=int, default=4)
     parser.add_argument("--output_path", type=str, default="vstar_results.jsonl")
     args = parser.parse_args()
 
-    eval_dataset = load_dataset("craigwu/vstar_bench", split="test")
-    results = generate_completions(args, eval_dataset)
+    results = generate_completions(args)
     accuracy = sum([1 if result["correct"] else 0 for result in results]) / len(results)
     print(f"Accuracy: {accuracy * 100:.2f}%")
