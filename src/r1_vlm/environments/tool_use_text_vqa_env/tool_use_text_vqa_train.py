@@ -90,8 +90,11 @@ def find_target_linear_names(
 
 
 def train():
+    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-small-tool-reward-may13-3B/checkpoint-150"
     model, peft_config, processor, model_config, gradient_checkpointing = (
-        load_model_and_processor(gradient_checkpointing=True, use_peft=False)
+        load_model_and_processor(
+            model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False
+        )
     )
     print("loaded model")
 
@@ -99,8 +102,8 @@ def train():
 
     print("loaded env")
 
-    # TODO: increase max examples per split
-    datasets = vf_env.get_dataset(splits=["train"])
+    # skip the first 600 examples as I'm restarting at step 150 x 4 gradient accumulation steps = 600
+    datasets = vf_env.get_dataset(splits=["train"], skip_index=600)
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
@@ -110,7 +113,7 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-small-tool-reward-may13-3B",
+        output_dir="vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-small-tool-reward-may13-restart-with-structured-output-3B",
         # increase learning rate for PEFT - 1e-4
         learning_rate=1e-4 if peft_config is not None else 1e-6,
         max_grad_norm=1.0,
@@ -120,7 +123,7 @@ def train():
         logging_steps=1,
         save_steps=50,
         save_total_limit=100,
-        num_train_epochs=1,
+        num_train_epochs=2,
         per_device_train_batch_size=1,
         num_generations=3,
         gradient_accumulation_steps=4,
