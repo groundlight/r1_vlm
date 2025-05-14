@@ -73,7 +73,7 @@ class VStarToolEnv(ToolVisionEnv):
 
     def get_dataset(
         self,
-        max_size: int = 1024,
+        max_size: int | None = None,
     ) -> Dataset:
         dataset = create_r1_vstar_tool_use_dataset(
             benchmark_directory=self.benchmark_directory,

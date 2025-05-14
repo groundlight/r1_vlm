@@ -59,7 +59,7 @@ def generate_completions(args: argparse.Namespace):
     )
     processor = AutoProcessor.from_pretrained(args.model_path)
     env = VStarToolEnv(processing_class=processor, benchmark_directory=args.benchmark_directory)
-    dataset = env.get_dataset()
+    dataset = env.get_dataset(max_size=args.max_size)
 
     sampling_params = SamplingParams(
         temperature=args.temperature,
@@ -119,6 +119,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit_image_per_prompt", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max_tokens", type=int, default=2048)
+    parser.add_argument("--max_size", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--tensor_parallel_size", type=int, default=4)
     parser.add_argument("--output_path", type=str, default="vstar_results.jsonl")
