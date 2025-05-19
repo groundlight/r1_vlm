@@ -14,7 +14,7 @@ from r1_vlm.datasets.utils import preprocess_r1_dataset
 
 
 def evaluate_result(result: dict):
-    gt_answer = result["multiple_choice_answer_letter"]
+    gt_answer = result["gt_answer"]
     generated_text = result["generated_text"]
 
     score = 1.0 if gt_answer == generated_text else 0.0
@@ -47,12 +47,11 @@ if __name__ == "__main__":
     )
 
     sampling_params = SamplingParams(
-        temperature=0.1,
+        temperature=1.0,
         # max_tokens=10,
         stop_token_ids=[],
     )
 
-    # TODO: write this dataset
     dataset = create_aok_vqa_base_mc_for_eval_dataset(splits_to_process=["train"])
     dataset = preprocess_r1_dataset(dataset)
 
@@ -96,7 +95,7 @@ if __name__ == "__main__":
             generated_text = output.outputs[0].text
             result = {
                 "question_id": example["question_id"],
-                "gt_answers": example["answers"],
+                "gt_answer": example["multiple_choice_answer_letter"],
                 "generated_text": generated_text,
             }
             result = evaluate_result(result)

@@ -16,6 +16,9 @@ from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
 )
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
+from r1_vlm.environments.tool_use_aok_text_vqa_env.find_aok_training_examples import (
+    find_AOK_training_examples_less_than_0_5_pass_rate,
+)
 from r1_vlm.environments.tool_use_text_vqa_env.find_examples_for_training import (
     find_examples_for_training_less_than_0_5_VQA_score,
 )
@@ -331,10 +334,14 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
             max_examples_per_split: int = None,
         ):
             # TODO: add train examples to include
+            train_examples_to_include = (
+                find_AOK_training_examples_less_than_0_5_pass_rate()
+            )
 
             dataset = create_r1_aok_vqa_tool_use_dataset(
                 splits_to_process=splits_to_process,
                 max_examples_per_split=max_examples_per_split,
+                train_examples_to_include=train_examples_to_include,
             )
 
             output_datasets = {}
@@ -375,6 +382,10 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
             if split == "train":
                 # probabilities = None means we alternate between the datasets deterministically
                 # stopping_strategy="all_exhausted" means we oversample from larger datasets until the smallest dataset is exhausted
+                print(
+                    f"Interleaving textvqa and aokvqa training datasets. textvqa training length: {len(text_vqa_dataset)}, aokvqa training length: {len(aok_vqa_dataset)}"
+                )
+
                 final_datasets[split] = interleave_datasets(
                     [text_vqa_dataset, aok_vqa_dataset],
                     probabilities=None,
@@ -943,7 +954,7 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
 
 if __name__ == "__main__":
     env = AOKAndTextVQAToolEnv(processing_class=None)
-    datasets = env.get_dataset(splits=["train"], max_examples_per_split=100)
+    datasets = env.get_dataset(splits=["train"])
     import ipdb
 
     ipdb.set_trace()
