@@ -78,6 +78,7 @@ def generate_completions(args: argparse.Namespace):
         else:
             batches.append([example])
 
+    parser = XMLParser(fields=["answer"])
     results = []
     for batch in tqdm(batches):
         conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
@@ -99,12 +100,14 @@ def generate_completions(args: argparse.Namespace):
 
         for example, model_answer in zip(batch, generated_texts):
             correct_answers = example["label"]
-
+            parsed_answer = parser.parse(model_answer).answer
+            parsed_answer = ''.join([x for x in parsed_answer if x.isupper()])
             result = {
                 "question_id": example["question_id"],
                 "gt_answers": correct_answers,
                 "model_answer": model_answer,
-                "correct": correct_answers == model_answer,
+                "parsed_answer": parsed_answer,
+                "correct": correct_answers == parsed_answer,
                 "category": example["category"],
             }
             results.append(result)
@@ -128,15 +131,11 @@ if __name__ == "__main__":
 
     results = generate_completions(args)
     
-    # parse the results
-    parser = XMLParser(fields=["think", "answer"])
-    parsed_answers = [parser.parse(result["model_answer"]).answer for result in results]
-    parsed_answers = [''.join([x for x in v if x.isupper()]) for v in parsed_answers]
-    gt_answers = [v['gt_answers'] for v in results]
-    accuracy = len([1 for pred, gt in zip(parsed_answers, gt_answers) if pred == gt]) / len(parsed_answers)
+    # calculate accuracy
+    accuracy = len([1 for result in results if result["correct"]]) / len(results)
     print(f"Accuracy: {accuracy * 100:.2f}%")
     # calculate relative_position and direct_attributes subset accuracy
-    relative_position_correct = len([1 for pred, gt, v in zip(parsed_answers, gt_answers, results) if pred == gt and v['category'] == 'relative_position']) / len([v for v in results if v['category'] == 'relative_position'])
+    relative_position_correct = len([1 for result in results if result["category"] == 'relative_position' and result["correct"]]) / len([v for v in results if v['category'] == 'relative_position'])
     print(f"Relative Position Accuracy: {relative_position_correct * 100:.2f}%")
-    direct_attributes_correct = len([1 for pred, gt, v in zip(parsed_answers, gt_answers, results) if pred == gt and v['category'] == 'direct_attributes']) / len([v for v in results if v['category'] == 'direct_attributes'])
+    direct_attributes_correct = len([1 for result in results if result["category"] == 'direct_attributes' and result["correct"]]) / len([v for v in results if v['category'] == 'direct_attributes'])
     print(f"Direct Attribute Accuracy: {direct_attributes_correct * 100:.2f}%")
