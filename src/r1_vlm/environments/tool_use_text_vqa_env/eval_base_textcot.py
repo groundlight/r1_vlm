@@ -139,6 +139,7 @@ def create_text_vqa_textcot_base_for_eval_dataset(
     splits_to_process: list[str] | None = None,
     max_examples_per_split: int | None = None,
     stage: int = 1,
+    idx_to_start: int = 0,
 ):
     dataset = load_dataset("lmms-lab/textvqa")
     process_fn = process_textcot_stage1_example if stage == 1 else process_textcot_stage2_example
@@ -155,7 +156,8 @@ def create_text_vqa_textcot_base_for_eval_dataset(
     for split in splits_to_process:
         print(f"Processing {split} split...")
         examples = []
-        for example in tqdm(dataset[split], desc=f"Processing {split} examples"):
+        selected_dataset = dataset[split].select(range(idx_to_start, len(dataset[split]))) if idx_to_start > 0 else dataset[split]
+        for example in tqdm(selected_dataset, desc=f"Processing {split} examples"):
             processed_example = process_fn(example)
             examples.append(processed_example)
 
@@ -277,6 +279,7 @@ if __name__ == "__main__":
     parser.add_argument("--split", type=str, default="train")
     parser.add_argument("--max_examples_per_split", type=int, default=None)
     parser.add_argument("--do_base_eval", action="store_true")
+    parser.add_argument("--idx_to_start", type=int, default=0)
     args = parser.parse_args()
 
     os.makedirs(args.results_dir_path, exist_ok=True)
@@ -295,8 +298,8 @@ if __name__ == "__main__":
         stop_token_ids=[],
     )
 
-    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=1, max_examples_per_split=args.max_examples_per_split)
-    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=2, max_examples_per_split=args.max_examples_per_split)
+    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=1, max_examples_per_split=args.max_examples_per_split, idx_to_start=args.idx_to_start)
+    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=2, max_examples_per_split=args.max_examples_per_split, idx_to_start=args.idx_to_start)
 
 
     # stage 1
