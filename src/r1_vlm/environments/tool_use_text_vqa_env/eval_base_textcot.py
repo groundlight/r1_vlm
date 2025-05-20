@@ -2,7 +2,6 @@ import os
 import re
 import json
 
-from copy import deepcopy
 from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
 from transformers import AutoProcessor
@@ -18,7 +17,7 @@ from r1_vlm.environments.tool_use_text_vqa_env.tool_use_text_vqa_env import (
     normalize_answer,
 )
 
-# evaluating the base model on the validation set.
+# evaluating the base model on the train set.
 
 
 def evaluate_result(result: dict):
@@ -72,7 +71,6 @@ def process_textcot_stage1_example(example):
     question_id = example["question_id"]
     question = example["question"]
     # NOTE: We resize the image here if it is too large
-    raw_image = deepcopy(example["image"])
     image = resize_image(example["image"], max_size=1024)
     answers = example["answers"]
 
@@ -94,7 +92,7 @@ def process_textcot_stage1_example(example):
     return {
         "messages": messages,
         "image": image,
-        "raw_image": raw_image,
+        "raw_image": example["image"],
         "image_id": image_id,
         "question_id": question_id,
         "question": question,
@@ -107,7 +105,6 @@ def process_textcot_stage2_example(example):
     question_id = example["question_id"]
     question = example["question"]
     # NOTE: We resize the image here if it is too large
-    raw_image = deepcopy(example["image"])
     image = resize_image(example["image"], max_size=1024)
     answers = example["answers"]
 
@@ -129,7 +126,7 @@ def process_textcot_stage2_example(example):
     return {
         "messages": messages,
         "image": image,
-        "raw_image": raw_image,
+        "raw_image": example["image"],
         "image_id": image_id,
         "question_id": question_id,
         "question": question,
@@ -271,6 +268,7 @@ if __name__ == "__main__":
     MODEL_PATH = "Qwen/Qwen2.5-VL-3B-Instruct"
     results_file_path = "/millcreek/home/bowen/Projects/r1_vlm/results/base_textcot_eval_on_training_results.jsonl"
 
+    processor = AutoProcessor.from_pretrained(MODEL_PATH)
     llm = LLM(
         model=MODEL_PATH,
         limit_mm_per_prompt={"image": 1, "video": 0},
@@ -284,21 +282,19 @@ if __name__ == "__main__":
         stop_token_ids=[],
     )
 
-    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["validation"], stage=1)
-    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["validation"], stage=2)
-
-    processor = AutoProcessor.from_pretrained(MODEL_PATH)
+    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["train"], stage=1)
+    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["train"], stage=2)
 
     if os.path.exists(results_file_path):
         with open(results_file_path, "r") as f:
             results = [json.loads(line) for line in f]
 
     # stage 1
-    dataset = preprocess_r1_dataset(stage_1_dataset['validation'])
+    dataset = preprocess_r1_dataset(stage_1_dataset['train'])
     stage_1_results = inference(llm, processor, sampling_params, dataset)
 
     # stage 2
-    dataset = preprocess_r1_dataset(stage_2_dataset['validation'])
+    dataset = preprocess_r1_dataset(stage_2_dataset['train'])
     stage_2_results = inference(llm, processor, sampling_params, dataset)
     # extract the bounding box from the generated text
     bounding_box_pattern = r"\[(\d+), (\d+), (\d+), (\d+)\]"
@@ -313,8 +309,8 @@ if __name__ == "__main__":
             result["bounding_box"] = None
         
     # stage 3
-    stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset['validation'], stage_1_results, stage_2_results)
-    dataset = preprocess_r1_dataset(dataset)
+    stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset['train'], stage_1_results, stage_2_results)
+    dataset = preprocess_r1_dataset(stage_3_dataset)
     stage_3_results = inference(llm, processor, sampling_params, dataset)
     for result in stage_3_results:
         result = evaluate_result(result)
@@ -325,8 +321,8 @@ if __name__ == "__main__":
 
         # with open(results_file_path, "a") as f:
         #     f.write(json.dumps(result) + "\n")
-    dataset = create_text_vqa_base_for_eval_dataset(splits_to_process=["validation"])
-    dataset = preprocess_r1_dataset(dataset['validation'])
+    dataset = create_text_vqa_base_for_eval_dataset(splits_to_process=["train"])
+    dataset = preprocess_r1_dataset(dataset['train'])
     results = inference(llm, processor, sampling_params, dataset)
     for result in results:
         result = evaluate_result(result)
