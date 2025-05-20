@@ -271,6 +271,10 @@ def save_jsonl(results, file_path):
         for result in results:
             f.write(json.dumps(result) + "\n")
 
+def load_jsonl(file_path):
+    with open(file_path, "r") as f:
+        return [json.loads(line) for line in f]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -300,17 +304,22 @@ if __name__ == "__main__":
     )
 
     stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=1, max_examples_per_split=args.max_examples_per_split, idx_to_start=args.idx_to_start)
-    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=2, max_examples_per_split=args.max_examples_per_split, idx_to_start=args.idx_to_start)
+    if not os.path.exists(os.path.join(args.results_dir_path, "stage_1_results.jsonl")):
+        # stage 1
+        dataset = preprocess_r1_dataset(stage_1_dataset[args.split])
+        stage_1_results = inference(llm, processor, sampling_params, dataset)
+        save_jsonl(stage_1_results, os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
+    else:
+        stage_1_results = load_jsonl(os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
 
-
-    # stage 1
-    dataset = preprocess_r1_dataset(stage_1_dataset[args.split])
-    stage_1_results = inference(llm, processor, sampling_params, dataset)
-    save_jsonl(stage_1_results, os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
-    # stage 2
-    dataset = preprocess_r1_dataset(stage_2_dataset[args.split])
-    stage_2_results = inference(llm, processor, sampling_params, dataset)
-    save_jsonl(stage_2_results, os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
+    if not os.path.exists(os.path.join(args.results_dir_path, "stage_2_results.jsonl")):
+        stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=2, max_examples_per_split=args.max_examples_per_split, idx_to_start=args.idx_to_start)
+        # stage 2
+        dataset = preprocess_r1_dataset(stage_2_dataset[args.split])
+        stage_2_results = inference(llm, processor, sampling_params, dataset)
+        save_jsonl(stage_2_results, os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
+    else:
+        stage_2_results = load_jsonl(os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
     # extract the bounding box from the generated text
     bounding_box_pattern = r"\[(\d+), (\d+), (\d+), (\d+)\]"
     for result in stage_2_results:
@@ -324,14 +333,17 @@ if __name__ == "__main__":
             result["bounding_box"] = None
         
     # stage 3
-    stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset[args.split], stage_1_results, stage_2_results)
-    dataset = preprocess_r1_dataset(stage_3_dataset)
-    stage_3_results = inference(llm, processor, sampling_params, dataset)
-    for result in stage_3_results:
-        result = evaluate_result(result)
+    if not os.path.exists(os.path.join(args.results_dir_path, "stage_3_results.jsonl")):
+        stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset[args.split], stage_1_results, stage_2_results)
+        dataset = preprocess_r1_dataset(stage_3_dataset)
+        stage_3_results = inference(llm, processor, sampling_params, dataset)
+        for result in stage_3_results:
+            result = evaluate_result(result)
+        save_jsonl(stage_3_results, os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
+    else:
+        stage_3_results = load_jsonl(os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
 
     print("Textcot avg score: ", evaluate(stage_3_results))
-    save_jsonl(stage_3_results, os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
 
     if args.do_base_eval:
         dataset = create_text_vqa_base_for_eval_dataset(splits_to_process=[args.split])
