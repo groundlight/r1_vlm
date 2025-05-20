@@ -310,6 +310,7 @@ if __name__ == "__main__":
         stage_1_results = inference(llm, processor, sampling_params, dataset)
         save_jsonl(stage_1_results, os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
     else:
+        print("Loading stage 1 results from cache...")
         stage_1_results = load_jsonl(os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
 
     if not os.path.exists(os.path.join(args.results_dir_path, "stage_2_results.jsonl")):
@@ -319,6 +320,7 @@ if __name__ == "__main__":
         stage_2_results = inference(llm, processor, sampling_params, dataset)
         save_jsonl(stage_2_results, os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
     else:
+        print("Loading stage 2 results from cache...")
         stage_2_results = load_jsonl(os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
     # extract the bounding box from the generated text
     bounding_box_pattern = r"\[(\d+), (\d+), (\d+), (\d+)\]"
@@ -341,6 +343,7 @@ if __name__ == "__main__":
             result = evaluate_result(result)
         save_jsonl(stage_3_results, os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
     else:
+        print("Loading stage 3 results from cache...")
         stage_3_results = load_jsonl(os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
 
     print("Textcot avg score: ", evaluate(stage_3_results))
