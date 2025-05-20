@@ -280,6 +280,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_examples_per_split", type=int, default=None)
     parser.add_argument("--do_base_eval", action="store_true")
     parser.add_argument("--idx_to_start", type=int, default=0)
+    parser.add_argument("--num_gpus", type=int, default=4)
     args = parser.parse_args()
 
     os.makedirs(args.results_dir_path, exist_ok=True)
@@ -288,7 +289,7 @@ if __name__ == "__main__":
     llm = LLM(
         model=args.model_path,
         limit_mm_per_prompt={"image": 1, "video": 0},
-        tensor_parallel_size=4,
+        tensor_parallel_size=args.num_gpus,
         gpu_memory_utilization=1.0,
     )
 
