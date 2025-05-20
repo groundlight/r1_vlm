@@ -386,16 +386,23 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
                     f"Interleaving textvqa and aokvqa training datasets. textvqa training length: {len(text_vqa_dataset)}, aokvqa training length: {len(aok_vqa_dataset)}"
                 )
 
-                final_datasets[split] = interleave_datasets(
+                text_vqa_dataset.shuffle()
+                aok_vqa_dataset.shuffle()
+
+                dataset = interleave_datasets(
                     [text_vqa_dataset, aok_vqa_dataset],
                     probabilities=None,
                     stopping_strategy="all_exhausted",
                 )
+
             else:
                 # otherwise, we just concatenate the datasets as order is irrelevant
-                final_datasets[split] = concatenate_datasets(
-                    [text_vqa_dataset, aok_vqa_dataset]
-                )
+                dataset = concatenate_datasets([text_vqa_dataset, aok_vqa_dataset])
+
+            dataset = self.inject_system_prompt(dataset)
+            dataset = preprocess_r1_dataset(dataset)
+
+            final_datasets[split] = dataset
 
         if skip_index is not None:
             final_datasets["train"] = final_datasets["train"].select(
@@ -610,7 +617,7 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
             dataset_name = kwargs["dataset_name"][0]
 
             # text vqa's reward is split 50/50 between hard and soft correctness each with half weight
-            if dataset_name == "textvqa":
+            if dataset_name == "text_vqa":
                 hard_rewards = correct_answer_reward_func_textvqa(
                     prompts, completions, completions_messages, **kwargs
                 )
@@ -630,7 +637,7 @@ class AOKAndTextVQAToolEnv(ToolVisionEnv):
                 )
             else:
                 raise ValueError(
-                    f"Unknown dataset: {dataset_name}. Expected one of: textvqa, aok_vqa"
+                    f"Unknown dataset: {dataset_name}. Expected one of: text_vqa, aok_vqa"
                 )
 
         def check_correctness_textvqa(conversation, correct_answers) -> bool:
