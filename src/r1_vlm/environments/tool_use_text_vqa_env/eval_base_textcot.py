@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import argparse
 
 from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
@@ -263,14 +264,26 @@ def inference(llm, processor, sampling_params, dataset):
 
     return results
 
+def save_jsonl(results, file_path):
+    with open(file_path, "w") as f:
+        for result in results:
+            f.write(json.dumps(result) + "\n")
+
 
 if __name__ == "__main__":
-    MODEL_PATH = "Qwen/Qwen2.5-VL-3B-Instruct"
-    results_file_path = "/millcreek/home/bowen/Projects/r1_vlm/results/base_textcot_eval_on_training_results.jsonl"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", type=str, default="Qwen/Qwen2.5-VL-3B-Instruct")
+    parser.add_argument("--results_dir_path", type=str, default="/millcreek/home/bowen/Projects/r1_vlm/results")
+    parser.add_argument("--split", type=str, default="train")
+    parser.add_argument("--max_examples_per_split", type=int, default=None)
+    parser.add_argument("--do_base_eval", action="store_true")
+    args = parser.parse_args()
 
-    processor = AutoProcessor.from_pretrained(MODEL_PATH)
+    os.makedirs(args.results_dir_path, exist_ok=True)
+
+    processor = AutoProcessor.from_pretrained(args.model_path)
     llm = LLM(
-        model=MODEL_PATH,
+        model=args.model_path,
         limit_mm_per_prompt={"image": 1, "video": 0},
         tensor_parallel_size=4,
         gpu_memory_utilization=1.0,
@@ -282,20 +295,18 @@ if __name__ == "__main__":
         stop_token_ids=[],
     )
 
-    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["train"], stage=1)
-    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=["train"], stage=2)
+    stage_1_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=1, max_examples_per_split=args.max_examples_per_split)
+    stage_2_dataset = create_text_vqa_textcot_base_for_eval_dataset(splits_to_process=[args.split], stage=2, max_examples_per_split=args.max_examples_per_split)
 
-    if os.path.exists(results_file_path):
-        with open(results_file_path, "r") as f:
-            results = [json.loads(line) for line in f]
 
     # stage 1
-    dataset = preprocess_r1_dataset(stage_1_dataset['train'])
+    dataset = preprocess_r1_dataset(stage_1_dataset[args.split])
     stage_1_results = inference(llm, processor, sampling_params, dataset)
-
+    save_jsonl(stage_1_results, os.path.join(args.results_dir_path, "stage_1_results.jsonl"))
     # stage 2
-    dataset = preprocess_r1_dataset(stage_2_dataset['train'])
+    dataset = preprocess_r1_dataset(stage_2_dataset[args.split])
     stage_2_results = inference(llm, processor, sampling_params, dataset)
+    save_jsonl(stage_2_results, os.path.join(args.results_dir_path, "stage_2_results.jsonl"))
     # extract the bounding box from the generated text
     bounding_box_pattern = r"\[(\d+), (\d+), (\d+), (\d+)\]"
     for result in stage_2_results:
@@ -309,22 +320,21 @@ if __name__ == "__main__":
             result["bounding_box"] = None
         
     # stage 3
-    stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset['train'], stage_1_results, stage_2_results)
+    stage_3_dataset = create_text_vqa_textcot_stage3_base_for_eval_dataset(stage_1_dataset[args.split], stage_1_results, stage_2_results)
     dataset = preprocess_r1_dataset(stage_3_dataset)
     stage_3_results = inference(llm, processor, sampling_params, dataset)
     for result in stage_3_results:
         result = evaluate_result(result)
 
     print("Textcot avg score: ", evaluate(stage_3_results))
-        # current_score = evaluate(results)
-        # print(f"Current score: {current_score}")
+    save_jsonl(stage_3_results, os.path.join(args.results_dir_path, "stage_3_results.jsonl"))
 
-        # with open(results_file_path, "a") as f:
-        #     f.write(json.dumps(result) + "\n")
-    dataset = create_text_vqa_base_for_eval_dataset(splits_to_process=["train"])
-    dataset = preprocess_r1_dataset(dataset['train'])
-    results = inference(llm, processor, sampling_params, dataset)
-    for result in results:
-        result = evaluate_result(result)
+    if args.do_base_eval:
+        dataset = create_text_vqa_base_for_eval_dataset(splits_to_process=[args.split])
+        dataset = preprocess_r1_dataset(dataset[args.split])
+        results = inference(llm, processor, sampling_params, dataset)
+        for result in results:
+            result = evaluate_result(result)
 
-    print("Base avg score: ", evaluate(results))
+        print("Base avg score: ", evaluate(results))
+        save_jsonl(results, os.path.join(args.results_dir_path, "base_results.jsonl"))
