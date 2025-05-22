@@ -161,12 +161,12 @@ class SimpleVisionEnv(SimpleEnv):
             "mask": completion_masks,
         }
 
-    def prepare_data(self, *, inputs, processing_class):
+    def prepare_data(self, *, inputs, processing_class, add_generation_prompt=False):
         """
         prepares the data to be used for forward pass with VLLM and logprobs calculations with hf
         """
         conversations, texts, batch, vllm_inputs = prepare_inputs_for_env(
-            inputs=inputs, processing_class=processing_class
+            inputs=inputs, processing_class=processing_class, add_generation_prompt=add_generation_prompt
         )
 
         return conversations, texts, batch, vllm_inputs
@@ -180,7 +180,7 @@ class SimpleVisionEnv(SimpleEnv):
         return {}
 
 
-def prepare_inputs_for_env(*, inputs, processing_class):
+def prepare_inputs_for_env(*, inputs, processing_class, add_generation_prompt=False):
     """
     Prepares inputs for an env's .generate method.
 
@@ -202,7 +202,7 @@ def prepare_inputs_for_env(*, inputs, processing_class):
 
     # apply the chat template to the messages and add image tokens
     texts = processing_class.apply_chat_template(
-        conversations, continue_final_message=True, tokenize=False
+        conversations, continue_final_message=not add_generation_prompt, tokenize=False, add_generation_prompt=add_generation_prompt
     )
 
     vllm_inputs = []
