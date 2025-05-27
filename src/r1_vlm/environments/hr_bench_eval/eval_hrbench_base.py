@@ -49,6 +49,16 @@ def generate_completions(args: argparse.Namespace):
 
     eval_indices = [result["index"] for result in results]
     for batch in tqdm(batches):
+        for example in batch:
+            if example["index"] in eval_indices:
+                print(f"Skipping example {example['index']} because it has already been evaluated")
+                batch.remove(example)
+                continue
+            else:
+                eval_indices.append(example["index"])
+        if len(batch) == 0:
+            continue
+
         conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
             inputs=batch, processing_class=processor, add_generation_prompt=True
         )
@@ -67,9 +77,6 @@ def generate_completions(args: argparse.Namespace):
         )
 
         for example, model_answer in zip(batch, generated_texts):
-            if example["index"] in eval_indices:
-                print(f"Skipping example {example['index']} because it has already been evaluated")
-                continue
             correct_answers = example["answer"]
 
             result = {
