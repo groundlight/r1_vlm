@@ -41,7 +41,13 @@ def generate_completions(args: argparse.Namespace):
         else:
             batches.append([example])
 
-    results = []
+    if os.path.exists(args.output_path):
+        with open(args.output_path, "r") as f:
+            results = [json.loads(line) for line in f]
+    else:
+        results = []
+
+    eval_indices = [result["index"] for result in results]
     for batch in tqdm(batches):
         conversations, texts, processed_batch, vllm_inputs = env.prepare_data(
             inputs=batch, processing_class=processor, add_generation_prompt=True
@@ -61,6 +67,9 @@ def generate_completions(args: argparse.Namespace):
         )
 
         for example, model_answer in zip(batch, generated_texts):
+            if example["index"] in eval_indices:
+                print(f"Skipping example {example['index']} because it has already been evaluated")
+                continue
             correct_answers = example["answer"]
 
             result = {
