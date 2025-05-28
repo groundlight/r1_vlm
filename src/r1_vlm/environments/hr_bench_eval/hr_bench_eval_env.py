@@ -57,7 +57,7 @@ class HRBenchToolEnv(ToolVisionEnv):
     def __init__(
         self,
         processing_class: AutoProcessor,
-        benchmark_directory: str,
+        split: str,
         tools_with_parsers: list[tuple[Callable, ToolArgParser]] = [
             (zoom, parse_zoom_args),
         ],
@@ -71,7 +71,7 @@ class HRBenchToolEnv(ToolVisionEnv):
             tool_prompt_template=tool_prompt_template,
         )
 
-        self.benchmark_directory = benchmark_directory
+        self.split = split
         self.parser = XMLParser(fields=["think", "answer", "tool"])
         self._fields = [
             ("think", ["think"]),
