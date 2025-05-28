@@ -90,6 +90,7 @@ class HRBenchToolEnv(ToolVisionEnv):
             split=self.split,
             max_size=max_size,
         )
-        dataset = self.inject_system_prompt(dataset)
+        # for 8k, batched need to be set as False because the dataset is too large
+        dataset = self.inject_system_prompt(dataset, batched=self.split == "4k")
         dataset = preprocess_r1_dataset(dataset)
         return dataset

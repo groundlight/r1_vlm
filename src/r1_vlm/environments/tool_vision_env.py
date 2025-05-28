@@ -168,7 +168,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         # can end early if the model provides an answer.
         self.max_steps = max_steps
 
-    def inject_system_prompt(self, dataset: Dataset) -> Dataset:
+    def inject_system_prompt(self, dataset: Dataset, batched: bool = True) -> Dataset:
         """
         Called by inherited class to inject a system prompt containing tool schemas into the given dataset.
 
@@ -207,7 +207,7 @@ class ToolVisionEnv(MultistepVisionEnv):
 
             return examples
 
-        return dataset.map(_inject_prompt, batched=True)
+        return dataset.map(_inject_prompt, batched=batched)
 
     def get_rubric(self) -> List[RewardFunc]:
         raise NotImplementedError(
