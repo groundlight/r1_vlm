@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "torch==2.5.1"]
+requires = ["hatchling", "torch==2.7.1"]
 build-backend = "hatchling.build"
 
 [project]
@@ -24,7 +24,7 @@ dependencies = [
     "pycocotools>=2.0.8",
     "python-dotenv>=1.0.1",
     "qwen-vl-utils>=0.0.11",
-    "torch==2.5.1",
+    "torch==2.7.1",
     "torchvision==0.20.1",
     "transformers==4.49.0",
     "vllm==0.7.3",

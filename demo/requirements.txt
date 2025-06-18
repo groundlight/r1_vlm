@@ -2,7 +2,7 @@ datasets==3.3.2
 gradio==5.20.0
 gradio_client==1.7.2
 qwen-vl-utils==0.0.10
-torch==2.5.1
+torch==2.7.1
 torchaudio==2.5.1
 torchvision==0.20.1
 tqdm==4.67.1
