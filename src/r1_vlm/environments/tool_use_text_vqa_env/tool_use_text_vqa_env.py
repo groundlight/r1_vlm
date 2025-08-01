@@ -348,11 +348,11 @@ class TextVQAToolEnv(ToolVisionEnv):
         reward_weights = []
         for reward_function in reward_functions:
             if reward_function.__name__ == "format_reward_func":
-                schedule = 1.0
+                schedule = 0.1
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
                 # small reward for tool execution
-                schedule = 0.1
+                schedule = 0.0
                 reward_weights.append(schedule)
 
             elif reward_function.__name__ == "correct_answer_reward_func":

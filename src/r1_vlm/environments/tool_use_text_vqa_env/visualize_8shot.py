@@ -58,3 +58,9 @@ for n in ns:
         if result["average_vqa_score"] <= n
     )
     print(f"Number of questions with average vqa score <={n}: {count}")
+
+# compute overall vqa score
+overall_vqa_score = sum(
+    [result["average_vqa_score"] for result in results_by_question_id.values()]
+) / len(results_by_question_id)
+print(f"Overall VQA score: {overall_vqa_score}")

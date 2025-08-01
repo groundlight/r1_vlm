@@ -90,7 +90,8 @@ def find_target_linear_names(
 
 
 def train():
-    checkpoint = "/millcreek/home/sunil/r1_vlm/vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-small-tool-reward-may13-3B/checkpoint-150"
+    # start from model that was GRPOed on 0VQA data
+    checkpoint = "/millcreek/home/sunil/r1_vlm/successful_run_hard_data_may9/vlm-r1-text-vqa-clip-gradnorm-1.0-beta0.0-only-hard-examples-may9-3B/checkpoint-800"
     model, peft_config, processor, model_config, gradient_checkpointing = (
         load_model_and_processor(
             model_name_or_path=checkpoint, gradient_checkpointing=True, use_peft=False
@@ -102,8 +103,7 @@ def train():
 
     print("loaded env")
 
-    # skip the first 600 examples as I'm restarting at step 150 x 4 gradient accumulation steps = 600
-    datasets = vf_env.get_dataset(splits=["train"], skip_index=600)
+    datasets = vf_env.get_dataset(splits=["train"])
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
@@ -113,10 +113,10 @@ def train():
     training_args = GRPOConfig(
         model_init_kwargs=model_config,
         # save path on the runpod instance
-        output_dir="vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-small-tool-reward-may13-restart-with-structured-output-3B",
+        output_dir="vlm-r1-text-vqa-0_5-VQA-score-with-structured-output-may16-start-from-model-GRPOed-on-0VQA-beta-1e-4-highLR-lowClip-3B",
         # increase learning rate for PEFT - 1e-4
-        learning_rate=1e-4 if peft_config is not None else 1e-6,
-        max_grad_norm=1.0,
+        learning_rate=1e-4 if peft_config is not None else 1e-5,
+        max_grad_norm=1e-4,
         adam_beta2=0.98,
         lr_scheduler_type="cosine",
         warmup_steps=10,
@@ -132,8 +132,7 @@ def train():
         # GRPO specific parameters
         max_prompt_length=None,  # must be None for vllm + verifiers
         max_completion_length=2048,
-        # smaller KL regularization for PEFT than full finetuning
-        beta=1e-5 if peft_config is not None else 0.0,
+        beta=1e-5 if peft_config is not None else 1e-4,
         temperature=1.0,
         sync_ref_model=True,
         ref_model_sync_steps=64,

@@ -99,7 +99,7 @@ def train():
 
     print("loaded env")
 
-    datasets = vf_env.get_dataset(splits=["train"], max_examples_per_split=100)
+    datasets = vf_env.get_dataset(splits=["train"])
     train_dataset = datasets["train"]
 
     rubric = vf_env.get_rubric()
