@@ -245,7 +245,7 @@ class MultistepVisionEnv(Environment):
         total_steps = 2
 
         # flag to turn on/off structured output on the last step
-        should_use_structured_output_last_step = False
+        should_use_structured_output_last_step = True
 
         # main loop
         while not all_completed:

@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 
 from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
@@ -52,7 +53,7 @@ def evaluate(results: list[dict]):
 
 if __name__ == "__main__":
     MODEL_PATH = "Qwen/Qwen2.5-VL-3B-Instruct"
-    results_file_path = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_on_train_results.jsonl"
+    results_file_path = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_on_train_results_8shot.jsonl"
 
     llm = LLM(
         model=MODEL_PATH,
@@ -62,8 +63,8 @@ if __name__ == "__main__":
     )
 
     sampling_params = SamplingParams(
-        temperature=0.1,
-        # max_tokens=10,
+        temperature=1.0,
+        max_tokens=10,
         stop_token_ids=[],
     )
 
@@ -100,21 +101,23 @@ if __name__ == "__main__":
         vllm_image_inputs, _ = process_vision_info(messages)
         mm_data = {"image": vllm_image_inputs}
         vllm_input = {"prompt": text, "multi_modal_data": mm_data}
-        vllm_inputs.append(vllm_input)
+
+        # do 8 shot inference
+        for _ in range(8):
+            vllm_inputs.append(deepcopy(vllm_input))
 
         outputs = llm.generate(vllm_inputs, sampling_params=sampling_params)
-        generated_text = outputs[0].outputs[0].text
-
-        result = {
-            "question_id": example["question_id"],
-            "gt_answers": example["answers"],
-            "generated_text": generated_text,
-        }
-        result = evaluate_result(result)
-        results.append(result)
+        for output in outputs:
+            generated_text = output.outputs[0].text
+            result = {
+                "question_id": example["question_id"],
+                "gt_answers": example["answers"],
+                "generated_text": generated_text,
+            }
+            result = evaluate_result(result)
+            results.append(result)
+            with open(results_file_path, "a") as f:
+                f.write(json.dumps(result) + "\n")
 
         current_score = evaluate(results)
         print(f"Current score: {current_score}")
-
-        with open(results_file_path, "a") as f:
-            f.write(json.dumps(result) + "\n")

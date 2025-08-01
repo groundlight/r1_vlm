@@ -29,7 +29,7 @@ def add_vqa_scores(results: list[dict]):
 
 if __name__ == "__main__":
     # zoom model
-    trained_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_zoom_step800_validation_results.jsonl"
+    trained_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/tool_use_text_vqa_env/eval_zoom_vqa_less_than_0_5_with_small_tool_reward_step650_validation_results_single_shot.jsonl"
 
     # baseline model
     # trained_model_eval = "/millcreek/home/sunil/r1_vlm/src/r1_vlm/environments/simple_text_vqa_env/eval_baseline_step800_validation_results.jsonl"

@@ -14,7 +14,7 @@ from r1_vlm.datasets.text_vqa.text_vqa_tool_use_r1 import (
 from r1_vlm.datasets.utils import preprocess_r1_dataset
 from r1_vlm.environments.multistep_vision_env import MultistepVisionEnv
 from r1_vlm.environments.tool_use_text_vqa_env.find_examples_for_training import (
-    find_examples_for_training,
+    find_examples_for_training_less_than_0_5_VQA_score,
 )
 from r1_vlm.environments.tool_vision_env import ToolArgParser, ToolVisionEnv
 from r1_vlm.tools.tool_prompts import SINGLE_TOOL_PROMPT_TEMPLATE_SIMPLIFIED
@@ -283,7 +283,8 @@ class TextVQAToolEnv(ToolVisionEnv):
         max_size: int = 1024,
         skip_index: int | None = None,
     ) -> tuple[Dataset, Dataset, Dataset]:
-        train_examples_to_include = find_examples_for_training()
+        # train only on examples with average VQA score <= 0.5 (8shot)
+        train_examples_to_include = find_examples_for_training_less_than_0_5_VQA_score()
 
         dataset = create_r1_text_vqa_tool_use_dataset(
             splits_to_process=splits,
@@ -347,10 +348,10 @@ class TextVQAToolEnv(ToolVisionEnv):
         reward_weights = []
         for reward_function in reward_functions:
             if reward_function.__name__ == "format_reward_func":
-                schedule = 1.0
+                schedule = 0.1
                 reward_weights.append(schedule)
             elif reward_function.__name__ == "tool_execution_reward_func":
-                # No reward for tool execution
+                # small reward for tool execution
                 schedule = 0.0
                 reward_weights.append(schedule)
 

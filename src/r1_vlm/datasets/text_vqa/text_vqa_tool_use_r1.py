@@ -69,9 +69,10 @@ def generate_r1_messages(example, max_size=1024):
         "messages": r1_messages,
         "image": image,
         "image_id": image_id,
-        "question_id": question_id,
+        "question_id": str(question_id),
         "question": question,
         "answers": answers,
+        "dataset_name": "text_vqa",
     }
 
 
