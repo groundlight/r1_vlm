@@ -168,7 +168,7 @@ class ToolVisionEnv(MultistepVisionEnv):
         # can end early if the model provides an answer.
         self.max_steps = max_steps
 
-    def inject_system_prompt(self, dataset: Dataset) -> Dataset:
+    def inject_system_prompt(self, dataset: Dataset, batched: bool = True) -> Dataset:
         """
         Called by inherited class to inject a system prompt containing tool schemas into the given dataset.
 
@@ -180,34 +180,40 @@ class ToolVisionEnv(MultistepVisionEnv):
 
         def _inject_prompt(examples):
             messages_batch = examples["messages"]
-
             for messages in messages_batch:
-                if not messages or messages[0]["role"] != "system":
-                    raise ValueError("Expected first message to be a system message")
-
-                # Create a shuffled copy of tool schemas for this sample
-                shuffled_schemas = self.tool_schemas[:]  # Create a copy
-                random.shuffle(shuffled_schemas)
-
-                # Format tool descriptions with the shuffled order
-                tool_descriptions = format_tool_descriptions(shuffled_schemas)
-
-                # Format the prompt template with the randomized descriptions
-                formatted_prompt = self.tool_prompt_template.format(
-                    tool_descriptions=tool_descriptions
-                )
-
-                # Replace the content of the system message with the formatted prompt
-                messages[0]["content"] = [
-                    {
-                        "type": "text",
-                        "text": formatted_prompt,
-                    }
-                ]
-
+                _inject_prompt_to_messages(messages)
             return examples
 
-        return dataset.map(_inject_prompt, batched=True)
+        def _inject_prompt_to_messages(messages):
+            if not messages or messages[0]["role"] != "system":
+                raise ValueError("Expected first message to be a system message")
+            
+            # Create a shuffled copy of tool schemas for this sample
+            shuffled_schemas = self.tool_schemas[:]  # Create a copy
+            random.shuffle(shuffled_schemas)
+
+            # Format tool descriptions with the shuffled order
+            tool_descriptions = format_tool_descriptions(shuffled_schemas)
+
+            # Format the prompt template with the randomized descriptions
+            formatted_prompt = self.tool_prompt_template.format(
+                tool_descriptions=tool_descriptions
+            )
+
+            # Replace the content of the system message with the formatted prompt
+            messages[0]["content"] = [
+                {
+                    "type": "text",
+                    "text": formatted_prompt,
+                }
+            ]
+
+        if batched:
+            return dataset.map(_inject_prompt, batched=True)
+        else:
+            for messages in dataset["messages"]:
+                _inject_prompt_to_messages(messages)
+            return dataset
 
     def get_rubric(self) -> List[RewardFunc]:
         raise NotImplementedError(
