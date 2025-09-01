@@ -1,5 +1,5 @@
 datasets==3.3.2
-gradio==5.20.0
+gradio==5.31.0
 gradio_client==1.7.2
 qwen-vl-utils==0.0.10
 torch==2.5.1
